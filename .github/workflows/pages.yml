@@ -10,6 +10,10 @@ on:
 
 permissions:
   contents: read
+  # deploy-pages reads the artifact of this run through the Actions API, so the
+  # token needs to list artifacts; without it the deployment reports "Found 0
+  # artifact(s)" even though the upload succeeded.
+  actions: read
   pages: write
   id-token: write
 
@@ -28,8 +32,12 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      # Upload through upload-artifact@v4 rather than upload-pages-artifact so the
+      # artifact is always created with the v4 artifact API that deploy-pages reads.
+      - uses: actions/upload-artifact@v4
         with:
+          name: github-pages
           path: site
+          retention-days: 1
       - id: deployment
         uses: actions/deploy-pages@v4
