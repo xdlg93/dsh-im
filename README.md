@@ -60,23 +60,33 @@
 
 ## 安装
 
-推荐从 npm 安装已发布的稳定版本 **`@xdlg93/dsh-im`**，请按实际使用的运行方式选择命令。
+这个包**目前没有发布到 npm**，请从 Git 仓库安装（版本用 tag 固定），或从插件发现索引安装。
 
-**DSH Web**：在启动当前 Harness 的终端里执行，然后重启 `dsh web` 并刷新浏览器：
+**从插件索引安装（推荐）**：设置 → 插件 → 发现 → 添加索引源，粘贴：
+
+```
+https://xdlg93.github.io/dsh-im/index.json
+```
+
+搜到「DSH IM 机器人（微信 + QQ）」后直接安装。索引在 Pages 生效前可以用同一个文档的 raw 地址：
+`https://raw.githubusercontent.com/xdlg93/dsh-im/main/docs/index.json`。
+
+**从 Git 安装**：在启动当前 Harness 的终端里执行，然后重启 `dsh web` 并刷新浏览器：
 
 ```sh
-dsh plugin --profile web install @xdlg93/dsh-im
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
 ```
 
 **DSH Desktop**：在 Desktop 的内置终端中执行，然后完全退出并重新打开 Desktop：
 
 ```sh
-dsh plugin --profile desktop install @xdlg93/dsh-im
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
 ```
 
-`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。
+`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。把 `#v1.0.1`
+换成需要的 tag（或省略它取 `main`）即可升级或回退。
 
-**在 DSH 界面里安装**：也可以让 Agent 通过插件管理工具用 `plugin_manager install_bundle` 安装同一个包名，或直接编辑 profile 的 `package.json` 依赖后重启。无论哪种方式，安装完成后都要重启 Host。
+**在 DSH 界面里安装**：也可以让 Agent 通过插件管理工具用 `plugin_manager install_bundle` 安装同一个 Git 地址，或直接编辑 profile 的 `package.json` 依赖后重启。无论哪种方式，安装完成后都要重启 Host。
 
 **本地开发 / link 安装**：克隆本仓库后把绝对路径装进 profile，修改代码后重新构建即可：
 

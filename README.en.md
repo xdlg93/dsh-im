@@ -62,23 +62,33 @@ The plugin declares only the host versions it has actually been verified against
 
 ## Installation
 
-Install the published stable package **`@xdlg93/dsh-im`** from npm, choosing the command that matches how you run DSH.
+This package is **not published to npm yet**; install it from the Git repository (pinned to a tag) or from the plugin index.
 
-**DSH Web** — run this in the terminal that starts your Harness, then restart `dsh web` and refresh the browser:
+**From the plugin index (recommended)** — Settings → Plugins → Discover → add an index source and paste:
+
+```
+https://xdlg93.github.io/dsh-im/index.json
+```
+
+Then install "DSH IM bots (WeChat + QQ)" from the results. Until Pages is live, the same document is served raw at
+`https://raw.githubusercontent.com/xdlg93/dsh-im/main/docs/index.json`.
+
+**From Git** — run this in the terminal that starts your Harness, then restart `dsh web` and refresh the browser:
 
 ```sh
-dsh plugin --profile web install @xdlg93/dsh-im
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
 ```
 
 **DSH Desktop** — run this in Desktop's built-in terminal, then quit and reopen Desktop:
 
 ```sh
-dsh plugin --profile desktop install @xdlg93/dsh-im
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
 ```
 
-`--profile` must name the profile you actually run; `add` works as a synonym for `install`.
+`--profile` must name the profile you actually run; `add` works as a synonym for `install`. Swap `#v1.0.1` for
+another tag (or drop it to follow `main`) to upgrade or roll back.
 
-**From the DSH UI** — ask the agent to install the same package through `plugin_manager install_bundle`, or add it to the profile's `package.json` yourself. Either way, restart the Host when the install finishes.
+**From the DSH UI** — ask the agent to install the same Git address through `plugin_manager install_bundle`, or add it to the profile's `package.json` yourself. Either way, restart the Host when the install finishes.
 
 **Local development / link install** — clone the repository and install the absolute path into your profile; rebuild after editing:
 

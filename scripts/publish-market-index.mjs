@@ -1,5 +1,5 @@
-// Write site/index.json, the format-1 plugin-market index this repository
-// publishes through GitHub Pages.
+// Write docs/index.json, the format-1 plugin-market index this repository
+// publishes through GitHub Pages (branch publishing serves docs/ as the site root).
 //
 // The release flow is: commit and push the release, then run this script with
 // that commit so the index pins the exact source it advertises, then commit the
@@ -25,7 +25,7 @@ if (!/^[0-9a-f]{40}$/u.test(commit)) {
   throw new Error(`--commit must be a full 40-character commit SHA, got ${commit}`);
 }
 const publishTimestamp = Math.floor(Date.now() / 1000);
-const indexPath = resolve(root, 'site/index.json');
+const indexPath = resolve(root, 'docs/index.json');
 
 let existing;
 try {
@@ -91,5 +91,5 @@ if (dryRun) {
   process.stdout.write(text);
 } else {
   await writeFile(indexPath, text, 'utf8');
-  console.log(`Wrote site/index.json with ${manifest.name}@${manifest.version} at ${commit}.`);
+  console.log(`Wrote docs/index.json with ${manifest.name}@${manifest.version} at ${commit}.`);
 }
