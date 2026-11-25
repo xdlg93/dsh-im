@@ -503,3 +503,34 @@ test('Workspace adoption degrades when the Host has no Workspace services', asyn
     : { resolveByPath: async () => { throw new Error('unreadable'); } }) };
   assert.equal(await adoptDshWorkspace(failing, '/home/a/DSH/dsh-im'), false);
 });
+
+test('a plugin fiber declared with workspaceRegistry can read the Workspace list', async (t) => {
+  const { Context } = await import('@deepseek-ai/cordis');
+  const registry = { list: () => [{ path: '/home/xdl/DSH/workspace' }] };
+  const controller = { create: async () => ({ created: true }) };
+  const seen = {};
+  const root = new Context();
+  t.after(() => root.dispose?.());
+  root.provide('workspaceRegistry', registry);
+  root.provide('workspaceController', controller);
+  root.plugin({
+    name: 'probe',
+    inject: ['workspaceRegistry'],
+    apply(ctx) {
+      // Reading through ctx.get only answers for a declared service, which is why
+      // the plugin declares workspaceRegistry.
+      seen.paths = dshWorkspacePaths(ctx);
+      seen.default = defaultImWorkspace({}, { dshWorkspaces: seen.paths });
+      ctx.inject(['workspaceController'], (child) => {
+        seen.controller = typeof child.get('workspaceController')?.create;
+      });
+    },
+  });
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline && seen.controller === undefined) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.deepEqual(seen.paths, ['/home/xdl/DSH/workspace']);
+  assert.equal(seen.default, '/home/xdl/DSH/dsh-im');
+  assert.equal(seen.controller, 'function');
+});

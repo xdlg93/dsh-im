@@ -4,6 +4,19 @@
 
 版本号遵循语义化版本；`1.0.0` 是本 fork 的起点，与上游 5.10.0 没有版本号对应关系。
 
+## 1.2.2 — 2026-11-25
+
+### 修复
+
+- **同级默认工作区没有生效**：1.2.0/1.2.1 用 `ctx.get('workspaceRegistry')` 读 DSH 工作区列表，
+  但 Cordis 4.2 的 `ctx.get()` 只回答**本 fiber 声明过**的服务，插件当时只 inject 了
+  `connection`/`credentials`/`typertGateway`，于是永远读到空列表，回落到 `$DSH_HOME/im`——机器人
+  实际写进了 `~/.dsh/im`，侧边栏出现的也是「im」工作区而不是「dsh-im」。
+  现在 `workspaceRegistry` 加进插件的 `inject`，`ctx.get()` 能拿到列表；同时服务读取改成
+  `ctx.get()` 与属性访问双路，兼容注入子上下文。
+- 顺带修了 1.2.1 的注册顺序：`workspaceController.create()` 只接受已存在的目录，插件现在先
+  `mkdir -p` 再注册。
+
 ## 1.2.1 — 2026-11-25
 
 ### 修复

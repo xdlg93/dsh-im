@@ -27,6 +27,10 @@ export const inject = [
   'connection',
   'credentials',
   'typertGateway',
+  // The bot keeps its conversations beside the reader's Workspace, so the
+  // plugin has to read the Host's Workspace list. Reading it through ctx.get()
+  // only answers for a service this fiber injected, which is why it is declared.
+  'workspaceRegistry',
 ];
 
 function channelConfig(config, name, deliveryService) {

@@ -2,6 +2,29 @@ import { mkdir, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
+/**
+ * Read one Host service from a context.
+ *
+ * `ctx.get(name)` answers only for a service the current fiber injected, and a
+ * plain `ctx.name` throws on Cordis 4.2 when it was not declared. Both routes are
+ * tried so a caller can pass either the plugin context or an injected child.
+ */
+function serviceOf(ctx, name) {
+  if (typeof ctx?.get === 'function') {
+    try {
+      const service = ctx.get(name);
+      if (service !== undefined) return service;
+    } catch {
+      // Fall through to the property read below.
+    }
+  }
+  try {
+    return ctx?.[name];
+  } catch {
+    return undefined;
+  }
+}
+
 /** Directory name the plugin creates beside the reader's DSH Workspace. */
 export const IM_WORKSPACE_DIRECTORY = 'dsh-im';
 
@@ -14,7 +37,7 @@ export const IM_WORKSPACE_DIRECTORY = 'dsh-im';
  * without one (headless, CLI) simply reports nothing and the caller falls back.
  */
 export function dshWorkspacePaths(ctx) {
-  const registry = typeof ctx?.get === 'function' ? ctx.get('workspaceRegistry') : undefined;
+  const registry = serviceOf(ctx, 'workspaceRegistry');
   if (!registry || typeof registry.list !== 'function') return [];
   try {
     const listed = registry.list();
@@ -58,7 +81,7 @@ export function defaultImWorkspace(config = {}, { dshWorkspaces = [] } = {}) {
 export async function adoptDshWorkspace(ctx, path) {
   if (typeof path !== 'string' || !isAbsolute(path)) return false;
   try {
-    const registry = typeof ctx?.get === 'function' ? ctx.get('workspaceRegistry') : undefined;
+    const registry = serviceOf(ctx, 'workspaceRegistry');
     if (registry && typeof registry.resolveByPath === 'function' && await registry.resolveByPath(path)) {
       return true;
     }
@@ -66,7 +89,7 @@ export async function adoptDshWorkspace(ctx, path) {
     // An unreadable registry falls through to the controller, which is the only
     // writer anyway.
   }
-  const controller = typeof ctx?.get === 'function' ? ctx.get('workspaceController') : undefined;
+  const controller = serviceOf(ctx, 'workspaceController');
   if (!controller || typeof controller.create !== 'function') return false;
   try {
     // The registry adopts an existing directory only; the bot needs the directory
