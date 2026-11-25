@@ -1,4 +1,5 @@
-# pnpm 11 reads build-script approvals from this file, not from package.json.
-# esbuild's postinstall picks the platform binary, so the build needs it.
-onlyBuiltDependencies:
-  - esbuild
+# pnpm 11 reads dependency build-script approvals from this file rather than the
+# package.json `pnpm` field, and fails an install that leaves a script ignored.
+# esbuild's postinstall picks the platform binary the build needs.
+allowBuilds:
+  esbuild: true
