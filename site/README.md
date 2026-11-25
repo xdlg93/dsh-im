@@ -2,6 +2,11 @@
 
 这个目录由 GitHub Pages 原样发布，供 DSH 的「插件 → 发现」读取。
 
+发布方式：**Deploy from a branch**，Branch `main`，Folder `/site`。仓库不使用
+`actions/deploy-pages` 工作流——在这个仓库上它一直报 “No artifacts named
+github-pages were found”，而分支发布不需要 artifact 服务，推送到 `site/` 即自动重建。
+`.nojekyll` 让 Pages 跳过 Jekyll，文件名不会被改写。
+
 - `index.json`：format 1 的插件市场索引，由 `npm run publish:index -- --commit <release-sha>` 生成，不要手改。
 - `icons/dsh-im.png`：索引条目引用的 256 px 图标。
 - `.nojekyll`：让 Pages 跳过 Jekyll，避免文件名被改写。
@@ -15,7 +20,7 @@ git tag -a v1.0.x -F <notes>      # 1. 打 tag
 git push origin main v1.0.x       # 2. 推送
 npm run publish:index -- --commit "$(git rev-parse v1.0.x)"   # 3. 写入索引
 git add site/index.json && git commit -m "chore: publish 1.0.x in the plugin market index"
-git push origin main              # 4. 推送后 Pages 自动部署
+git push origin main              # 4. 推送后 Pages 自动重建 site/
 ```
 
 <!-- pages retry 20261125T064505Z -->
