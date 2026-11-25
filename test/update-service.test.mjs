@@ -6,7 +6,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createUpdateService, fetchNpmRelease } from '../plugin-src/host/update-service.mjs';
+import {
+  createUpdateService,
+  fetchIndexRelease,
+  fetchNpmRelease,
+  RELEASE_INDEX_URL,
+} from '../plugin-src/host/update-service.mjs';
+import { PACKAGE_NAME } from '../plugin-src/host/update-runtime.mjs';
 
 function release(version = '3.0.8', fields = {}) {
   return {
@@ -32,12 +38,32 @@ async function fixture(t, options = {}) {
     blockedReason: null, installationKey: 'old-installation',
     ...options.environment,
   };
-  const state = { time: 10_000, release: release(), fetches: 0, installs: [], installKeys: [], failFetch: false };
+  const state = {
+    time: 10_000, release: release(), fetches: 0, indexFetches: 0,
+    installs: [], installKeys: [], specs: [], failFetch: false, failIndex: false,
+    // The published index pins a repository commit per version.
+    commit: 'a'.repeat(40),
+  };
+  const indexDocument = () => ({
+    format: 1,
+    title: { en: 'test', zh: '测试' },
+    plugins: [{
+      name: PACKAGE_NAME,
+      metadata: { keywords: [] },
+      versions: [{
+        version: state.release.version,
+        publishTimestamp: 1,
+        source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: state.commit },
+        engines: { dsh: '^0.2.2-rc.5' },
+      }],
+    }],
+  });
   const runtime = {
     inspect: async () => ({ ...environment }),
-    install: async (version, { signal, expectedInstallationKey }) => {
+    install: async (version, { signal, expectedInstallationKey, spec }) => {
       state.installs.push(version);
       state.installKeys.push(expectedInstallationKey);
+      state.specs.push(spec ?? null);
       if (options.install) return options.install({ version, signal, environment, expectedInstallationKey });
       environment.installedVersion = version;
       environment.installationKey = 'new-installation';
@@ -47,8 +73,13 @@ async function fixture(t, options = {}) {
     runtime, runningVersion: '3.0.7', nodeVersion: '22.20.0', now: () => state.time,
     fetchImpl: async (url, init) => {
       state.fetches++;
-      assert.equal(url, 'https://registry.npmjs.org/%40xdlg93%2Fdsh-im/latest');
       assert.equal(init.redirect, 'error');
+      if (url === RELEASE_INDEX_URL) {
+        state.indexFetches++;
+        if (state.failFetch || state.failIndex) throw new Error('private-path-and-token');
+        return new Response(JSON.stringify(indexDocument()));
+      }
+      assert.equal(url, 'https://registry.npmjs.org/%40xdlg93%2Fdsh-im/latest');
       if (state.failFetch) throw new Error('private-path-and-token');
       return new Response(JSON.stringify(state.release));
     },
@@ -222,7 +253,7 @@ test('recovered history cannot bypass failed checks, expired confirmation or cha
   assert.equal(checked.canInstall, true);
   f.state.time += 3_000;
   f.state.failFetch = true;
-  await assert.rejects(host.check(), { code: 'check-failed' });
+  await assert.rejects(host.check(), { code: 'index-unreachable' });
   assert.equal((await host.status()).canInstall, false);
   await assert.rejects(host.install({ checkId: checked.checkId, requestId: 'failed-check' }), { code: 'check-expired' });
 
@@ -241,6 +272,9 @@ test('recovery flags are derived again and do not override the new release Node 
   const host = f.restart('4.23.0');
   assert.equal((await host.check()).job.recoverable, true);
   f.state.time += 3_000;
+  // The Node requirement lives in npm metadata, so this release arrives through
+  // the npm fallback while the index is unreachable.
+  f.state.failIndex = true;
   f.state.release = release('4.24.0', { engines: { node: '>=99' } });
   const incompatible = await host.check();
   assert.equal(incompatible.job.recoverable, true);
@@ -256,7 +290,7 @@ test('recovery flags are derived again and do not override the new release Node 
   assert.equal(invalid.canInstall, false);
 });
 
-test('status is local and npm checking only happens on demand', async (t) => {
+test('status is local and checking the index only happens on demand', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.service.status()).latestVersion, null);
   assert.equal(f.state.fetches, 0);
@@ -266,6 +300,7 @@ test('status is local and npm checking only happens on demand', async (t) => {
   assert.ok(checked.checkId);
   await f.service.check();
   assert.equal(f.state.fetches, 1);
+  assert.equal(f.state.indexFetches, 1, 'the index answers first, npm is never asked');
 });
 
 test('SemVer comparison handles two digit patches and refuses downgrades or equal versions', async (t) => {
@@ -299,7 +334,11 @@ test('source installs and incompatible Host Node can check but cannot install', 
   assert.equal(checked.sourceInstall, true);
   assert.equal(checked.canInstall, false);
   assert.equal(checked.checkId, null);
+  // Node requirements come from npm metadata; the index only carries the DSH range,
+  // so this case runs through the npm fallback.
   const oldNode = await fixture(t, { service: { nodeVersion: '22.18.0' } });
+  oldNode.state.failIndex = true;
+  oldNode.state.release = release('3.0.8', { engines: { node: '>=22.19' } });
   assert.equal((await oldNode.service.check()).blockedReason, 'incompatible-node');
   assert.deepEqual(source.state.installs, []);
 });
@@ -320,7 +359,7 @@ test('a failed check invalidates previous install confirmation without claiming 
   const checked = await f.service.check();
   f.state.time += 3_000;
   f.state.failFetch = true;
-  await assert.rejects(f.service.check(), { code: 'check-failed' });
+  await assert.rejects(f.service.check(), { code: 'index-unreachable' });
   assert.equal((await f.service.status()).canInstall, false);
   await assert.rejects(f.service.install({ checkId: checked.checkId, requestId: 'retry' }), { code: 'check-expired' });
 });
@@ -729,4 +768,66 @@ test('the service watchdog reports timeout and waits for the owned installer to 
   assert.equal(result.job.message, 'install-timeout');
   await f.service.close();
   assert.equal((await readdir(await f.directory())).includes('install.lock'), false);
+});
+
+test('the index release picks the newest version this Host can activate', async () => {
+  const commit = 'b'.repeat(40);
+  const document = {
+    format: 1,
+    title: { en: 'test', zh: '测试' },
+    plugins: [{
+      name: PACKAGE_NAME,
+      metadata: { keywords: [] },
+      versions: [
+        { version: '2.0.0', publishTimestamp: 1, source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit }, engines: { dsh: '^0.1.0' } },
+        { version: '1.4.0', publishTimestamp: 2, source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit }, engines: { dsh: '^0.2.2-rc.5' } },
+        { version: '1.3.0', publishTimestamp: 3, source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit }, engines: { dsh: '^0.2.2-rc.5' } },
+        // Not installable: an npm tarball, a short commit, and a version newer
+        // than this DSH release accepts.
+        { version: '1.5.0', publishTimestamp: 4, source: { type: 'npm' }, engines: {} },
+        { version: '1.6.0', publishTimestamp: 5, source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: 'abc' }, engines: {} },
+        { version: '1.7.0', publishTimestamp: 6, source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit }, engines: { dsh: '^0.3.0' } },
+      ],
+    }],
+  };
+  const release = await fetchIndexRelease(async () => new Response(JSON.stringify(document)), {
+    dshVersion: '0.2.3-alpha.2',
+  });
+  assert.equal(release.version, '1.4.0');
+  assert.equal(release.source, 'index');
+  assert.equal(release.installSpec, `git+https://github.com/xdlg93/dsh-im.git#${commit}`);
+});
+
+test('the index release fails closed on unreachable or malformed documents', async () => {
+  const failing = async () => { throw new Error('offline'); };
+  await assert.rejects(fetchIndexRelease(failing), { code: 'index-unreachable' });
+  await assert.rejects(fetchIndexRelease(async () => new Response('not json')), { code: 'index-invalid' });
+  await assert.rejects(fetchIndexRelease(async () => new Response(JSON.stringify({ format: 2 }))), { code: 'index-invalid' });
+  await assert.rejects(
+    fetchIndexRelease(async () => new Response(JSON.stringify({ format: 1, plugins: [] }))),
+    { code: 'index-invalid' },
+  );
+  // Every listed version is incompatible with the running DSH release.
+  await assert.rejects(fetchIndexRelease(async () => new Response(JSON.stringify({
+    format: 1,
+    plugins: [{
+      name: PACKAGE_NAME,
+      metadata: { keywords: [] },
+      versions: [{
+        version: '9.0.0',
+        publishTimestamp: 1,
+        source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im', commit: 'c'.repeat(40) },
+        engines: { dsh: '^9.0.0' },
+      }],
+    }],
+  })), { dshVersion: '0.2.3-alpha.2' }), { code: 'no-compatible-release' });
+});
+
+test('a git install of this repository updates in place from the index commit', async (t) => {
+  const f = await fixture(t);
+  const submitted = await f.submit('git-spec');
+  assert.equal(submitted.job.state, 'installing');
+  await waitForJob(f.service, 'restart-required');
+  assert.deepEqual(f.state.installs, ['3.0.8']);
+  assert.deepEqual(f.state.specs, [`git+https://github.com/xdlg93/dsh-im.git#${f.state.commit}`]);
 });

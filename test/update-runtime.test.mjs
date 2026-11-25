@@ -173,16 +173,25 @@ test('Desktop uses optional services and accepts the hoisted installation layout
   assert.deepEqual(f.calls, []);
 });
 
-test('profile detection follows only launcher arguments and never guesses from cwd', async (t) => {
+test('profile detection prefers launcher arguments and falls back to the plugin location', async (t) => {
   const f = await fixture(t, { name: 'web' });
+  // Launcher forms win.
   for (const args of [['web', '--profile', 'wrong'], ['--profile=web', '--prompt', '--profile', 'wrong']]) {
     f.options.argv = [process.execPath, f.cliEntry, ...args];
     assert.equal((await f.runtime().inspect()).profileName, 'web');
   }
+  // A service unit or wrapper passes no launcher profile: the installed location
+  // answers instead, which is how `dsh web` under systemd is identified.
   f.options.argv = [process.execPath, f.cliEntry, '--prompt', '--profile', 'web'];
-  assert.equal((await f.runtime().inspect()).blockedReason, 'unknown-profile');
+  assert.equal((await f.runtime().inspect()).profileName, 'web');
   f.options.argv = [process.execPath, f.cliEntry, '--profile', '../web'];
-  assert.equal((await f.runtime().inspect()).blockedReason, 'unknown-profile');
+  assert.equal((await f.runtime().inspect()).profileName, 'web');
+  // Never the working directory: a fresh Host that cannot locate itself stays
+  // unknown instead of guessing a profile.
+  const g = await fixture(t, { name: 'web' });
+  g.options.argv = [process.execPath, g.cliEntry];
+  g.options.moduleUrl = pathToFileURL(join(g.root, 'elsewhere', 'lib/index.js')).href;
+  assert.equal((await g.runtime().inspect()).blockedReason, 'unknown-profile');
 });
 
 test('local, Git, alias and external-directory installations cannot be replaced', async (t) => {

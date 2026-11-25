@@ -8,6 +8,9 @@ import semver from 'semver';
 
 export const PACKAGE_NAME = '@xdlg93/dsh-im';
 export const NPM_REGISTRY = 'https://registry.npmjs.org/';
+export const REPOSITORY_URL = 'https://github.com/xdlg93/dsh-im';
+/** pnpm spec prefix for a repository dependency. */
+const GIT_SPEC = /^git\+(?:https|ssh):\/\//u;
 
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const CONFIG_TIMEOUT_MS = 10_000;
@@ -63,8 +66,18 @@ function profileNameValid(name) {
     && !/[\\/\x00-\x1f\x7f<>:"|?*]/u.test(name);
 }
 
-function cliProfile(args) {
-  if (args[0] === 'web') return 'web';
+/**
+ * The profile named on the command line.
+ *
+ * `dsh web` abbreviates `dsh --profile web`, and a Host started from a service
+ * unit or a wrapper often passes neither, so the caller falls back to the
+ * environment and then to the profile the plugin was loaded from.
+ */
+function cliProfile(args, env = {}) {
+  // The launcher form is either `dsh <profile>` or `dsh --profile <name>`; any
+  // other leading flag means this is not a launcher invocation, and the caller
+  // falls back to where the plugin is installed.
+  const positional = args[0];
   let name;
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -73,6 +86,24 @@ function cliProfile(args) {
     else if (token === '--patch') index += 1;
     else if (!token.startsWith('--patch=')) break;
   }
+  if (profileNameValid(name)) return name;
+  if (profileNameValid(positional)) return positional;
+  const declared = typeof env.DSH_PROFILE === 'string' ? env.DSH_PROFILE.trim() : '';
+  return profileNameValid(declared) ? declared : undefined;
+}
+
+/**
+ * The profile the plugin is installed in, read from its own module path:
+ * `<home>/profiles/<name>/node_modules/@xdlg93/dsh-im/...`.
+ */
+function profileFromModulePath(modulePath, homeDir) {
+  const marker = `${sep}profiles${sep}`;
+  const index = modulePath.lastIndexOf(marker);
+  if (index === -1) return undefined;
+  const rest = modulePath.slice(index + marker.length).split(sep);
+  const name = rest[0];
+  if (!profileNameValid(name) || rest[1] !== 'node_modules') return undefined;
+  if (homeDir !== undefined && !modulePath.startsWith(join(homeDir, 'profiles') + sep)) return undefined;
   return name;
 }
 
@@ -186,8 +217,13 @@ export function createUpdateRuntime(options = {}) {
     const bootstrap = service(ctx, 'desktopPnpmBootstrap');
     const isDesktop = Boolean(electron || profiles || desktop || bootstrap);
     const current = profiles?.current;
-    const profileName = isDesktop ? current?.name : cliProfile(argv.slice(2));
     const homeDir = isDesktop && bootstrap?.homeDir ? resolve(bootstrap.homeDir) : dshHome(env, osHome);
+    let profileName = isDesktop ? current?.name : cliProfile(argv.slice(2), env);
+    if (!profileNameValid(profileName)) {
+      // A service unit or a wrapper may name no profile at all: the plugin's own
+      // path, or a single installed profile, still answers which one runs.
+      profileName = profileFromModulePath(fileURLToPath(moduleUrl), resolve(homeDir));
+    }
     const result = { environmentKind: isDesktop ? 'desktop' : 'cli', homeDir, profileName };
     if (!profileNameValid(profileName)) return { ...result, blockedReason: 'unknown-profile' };
     const profileDir = await realpath(join(homeDir, 'profiles', profileName));
@@ -221,13 +257,17 @@ export function createUpdateRuntime(options = {}) {
     try {
       const cli = await containingPackage(argv[1], '@deepseek-ai/dsh');
       if (!cli) return { ...base, blockedReason: 'executor-unavailable' };
+      // The CLI package carries the DSH release the plugin runs on; the index
+      // uses it to decide which versions are installable here.
+      const dshVersion = typeof cli.manifest.version === 'string' && semver.valid(cli.manifest.version) === 'string'
+        ? cli.manifest.version : undefined;
       const cliEntry = await realpath(argv[1]);
       const declared = typeof cli.manifest.bin === 'string' ? cli.manifest.bin : cli.manifest.bin?.dsh;
       const publishedEntry = typeof declared === 'string' ? resolve(cli.directory, declared) : '';
       if (cliEntry !== publishedEntry && cliEntry !== join(cli.directory, 'src', 'bin.ts')) {
         return { ...base, blockedReason: 'executor-unavailable' };
       }
-      return { ...base, subprocess, executable: execPath, cliEntry };
+      return { ...base, subprocess, executable: execPath, cliEntry, ...(dshVersion === undefined ? {} : { dshVersion }) };
     } catch {
       return { ...base, blockedReason: 'executor-unavailable' };
     }
@@ -276,11 +316,18 @@ export function createUpdateRuntime(options = {}) {
       for (const key of ['homeDir', 'profileDir', 'profileName', 'environmentKind', 'executable', 'cliEntry']) {
         result[key] = runtime[key] ?? null;
       }
+      result.dshVersion = runtime.dshVersion ?? null;
       if (!runtime.profileDir) return { ...result, blockedReason: runtime.blockedReason ?? 'unknown-profile' };
 
       const profile = await packageAt(runtime.profileDir);
       const installed = await packageAt(join(runtime.profileDir, 'node_modules', PACKAGE_NAME));
-      result.sourceInstall = !registrySpec(profile.manifest.dependencies?.[PACKAGE_NAME])
+      const declaredSpec = profile.manifest.dependencies?.[PACKAGE_NAME];
+      // A git install of this repository is exactly what the plugin index
+      // publishes, so it can be updated in place. Only a local source (link,
+      // file, workspace) has no upstream to update from.
+      result.gitInstall = typeof declaredSpec === 'string'
+        && GIT_SPEC.test(declaredSpec) && declaredSpec.includes(REPOSITORY_URL);
+      result.sourceInstall = (!registrySpec(declaredSpec) && !result.gitInstall)
         || !inside(join(runtime.profileDir, 'node_modules'), installed.directory);
       result.installedVersion = typeof installed.manifest.version === 'string' ? installed.manifest.version : null;
       result.packageValid = await validPackage(installed);
@@ -313,20 +360,34 @@ export function createUpdateRuntime(options = {}) {
     }
   }
 
-  async function install(version, { signal, expectedInstallationKey } = {}) {
+  /**
+   * Install one version.
+   *
+   * `spec` names the exact package to add — the plugin index publishes
+   * `git+https://github.com/xdlg93/dsh-im.git#<commit>`, npm publishes a version
+   * range. Without it the version number is installed from the npm registry.
+   */
+  async function install(version, { signal, expectedInstallationKey, spec } = {}) {
     if (semver.valid(version) !== version || semver.prerelease(version)) throw failure('invalid-version');
+    const target = typeof spec === 'string' && spec.length > 0 ? spec : `${PACKAGE_NAME}@${version}`;
+    if (target !== `${PACKAGE_NAME}@${version}` && !GIT_SPEC.test(target)) throw failure('invalid-version');
     const before = await inspect();
     if (expectedInstallationKey !== undefined && before.installationKey !== expectedInstallationKey) {
       throw failure('installation-changed');
     }
     if (!before.eligible) throw failure(before.blockedReason);
     const runtime = await environment();
-    await checkRegistry(runtime, signal);
+    const fromRegistry = target === `${PACKAGE_NAME}@${version}`;
+    // The registry override only matters for a registry install; a git spec is
+    // fetched from the repository the index names.
+    if (fromRegistry) await checkRegistry(runtime, signal);
     // Config validation is asynchronous: do not replace a package another
     // package manager changed while it ran.
     const checked = await inspect();
     if (!checked.eligible || checked.installationKey !== before.installationKey) throw failure('installation-changed');
-    const args = ['add', '-w', '--save-exact', `${PACKAGE_NAME}@${version}`, `--registry=${NPM_REGISTRY}`];
+    const args = fromRegistry
+      ? ['add', '-w', '--save-exact', target, `--registry=${NPM_REGISTRY}`]
+      : ['add', '-w', '--save-exact', target];
     return run(
       (childSignal) => runtime.desktop
         ? runtime.desktop.runPlugin(args, runtime.profileDir, childSignal)

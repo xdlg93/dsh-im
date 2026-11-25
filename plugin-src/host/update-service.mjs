@@ -70,6 +70,85 @@ export async function fetchNpmRelease(fetchImpl = globalThis.fetch, timeoutMs = 
   }
 }
 
+/** The plugin index this fork publishes; it names git sources, not npm tarballs. */
+export const RELEASE_INDEX_URL = 'https://xdlg93.github.io/dsh-im/index.json';
+const COMMIT = /^[0-9a-f]{40}$/u;
+
+/**
+ * Newest version the plugin index publishes for this Host.
+ *
+ * The index is the release channel for this fork: each version pins a repository
+ * commit, and `engines.dsh` says which DSH releases can run it. The newest
+ * version that this Host satisfies is the update target.
+ *
+ * @returns the release with the exact pnpm spec to install.
+ */
+export async function fetchIndexRelease(fetchImpl = globalThis.fetch, { dshVersion, timeoutMs = 10_000 } = {}) {
+  let response;
+  try {
+    response = await fetchImpl(RELEASE_INDEX_URL, {
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    throw updateError('index-unreachable');
+  }
+  if (!response.ok) throw updateError('index-unreachable');
+  let document;
+  try {
+    document = JSON.parse(await response.text());
+  } catch {
+    throw updateError('index-invalid');
+  }
+  if (document?.format !== 1 || !Array.isArray(document.plugins)) throw updateError('index-invalid');
+  const entry = document.plugins.find((plugin) => plugin?.name === PACKAGE_NAME);
+  if (!entry || !Array.isArray(entry.versions) || entry.versions.length === 0) throw updateError('index-invalid');
+  const candidates = [];
+  for (const version of entry.versions) {
+    if (typeof version?.version !== 'string' || semver.valid(version.version) !== version.version) continue;
+    if (version.source?.type !== 'git') continue;
+    const url = typeof version.source.url === 'string' ? version.source.url : '';
+    const commit = typeof version.source.commit === 'string' ? version.source.commit : '';
+    if (!/^https:\/\//u.test(url) || !COMMIT.test(commit)) continue;
+    const range = typeof version.engines?.dsh === 'string' ? version.engines.dsh : undefined;
+    // A version the running DSH cannot activate is not an update, it is a broken
+    // install: skip it rather than offering it.
+    if (range !== undefined && typeof dshVersion === 'string' && semver.valid(dshVersion)
+      && !semver.satisfies(dshVersion, range, { includePrerelease: true })) continue;
+    candidates.push({ version: version.version, dshRange: range ?? null, url, commit });
+  }
+  if (candidates.length === 0) throw updateError('no-compatible-release');
+  candidates.sort((left, right) => semver.rcompare(left.version, right.version));
+  const newest = candidates[0];
+  return {
+    version: newest.version,
+    nodeRange: '*',
+    dshRange: newest.dshRange,
+    installSpec: `git+${newest.url}#${newest.commit}`,
+    source: 'index',
+  };
+}
+
+/**
+ * The newest release from whichever channel answers.
+ *
+ * The index is authoritative for this fork; npm is only a fallback for a Host
+ * that cannot reach GitHub Pages.
+ */
+export async function fetchRelease(fetchImpl = globalThis.fetch, options = {}) {
+  try {
+    return await fetchIndexRelease(fetchImpl, options);
+  } catch (indexError) {
+    try {
+      const release = await fetchNpmRelease(fetchImpl, options.timeoutMs);
+      return { ...release, dshRange: null, installSpec: null, source: 'npm' };
+    } catch {
+      throw indexError;
+    }
+  }
+}
+
 function pathsFor(environment) {
   if (!isAbsolute(environment.homeDir ?? '') || !isAbsolute(environment.profileDir ?? '')) return null;
   const key = createHash('sha256').update(environment.profileDir).digest('hex').slice(0, 24);
@@ -142,8 +221,17 @@ function processAlive(pid) {
 
 function publicJob(job) {
   if (!job) return null;
-  const { id, state, targetVersion, message } = job;
-  return { id, state, targetVersion, message, recoverable: job.recoverable === true };
+  const { id, state, targetVersion, previousVersion, message, startedAt, updatedAt } = job;
+  return {
+    id,
+    state,
+    targetVersion,
+    ...(typeof previousVersion === 'string' ? { previousVersion } : {}),
+    ...(Number.isFinite(startedAt) ? { startedAt } : {}),
+    ...(Number.isFinite(updatedAt) ? { updatedAt } : {}),
+    message,
+    recoverable: job.recoverable === true,
+  };
 }
 
 /** One update job per profile. Persist intent before starting pnpm, and never apply a restart here. */
@@ -260,6 +348,8 @@ export function createUpdateService({
       runningVersion,
       installedVersion: environment.installedVersion ?? null,
       latestVersion: checked?.release.version ?? null,
+      // Which channel answered the check, so the panel can name it.
+      releaseSource: checked?.release.source ?? null,
       profileName: environment.profileName ?? null,
       environmentKind: environment.environmentKind ?? 'cli',
       // Preserve source protection even when restart/recovery takes status priority.
@@ -287,7 +377,10 @@ export function createUpdateService({
     checking = (async () => {
       try {
         const environment = await runtime.inspect({ preflight: true });
-        const release = await fetchNpmRelease(fetchImpl, checkTimeoutMs);
+        const release = await fetchRelease(fetchImpl, {
+          dshVersion: environment.dshVersion ?? undefined,
+          timeoutMs: checkTimeoutMs,
+        });
         assertActive();
         checked = {
           release,
@@ -343,6 +436,7 @@ export function createUpdateService({
       await runtime.install(job.targetVersion, {
         signal: AbortSignal.any([abortController.signal, deadline]),
         expectedInstallationKey: originalEnvironment.installationKey,
+        ...(typeof job.installSpec === 'string' && job.installSpec ? { spec: job.installSpec } : {}),
       });
       if (disposed) throw updateError('interrupted');
       activeJob = { ...activeJob, state: 'verifying', updatedAt: now() };
@@ -402,6 +496,7 @@ export function createUpdateService({
         id: randomUUID(), requestId, state: 'installing', message: null,
         packageName: PACKAGE_NAME,
         targetVersion: confirmation.release.version, previousVersion: environment.installedVersion,
+        installSpec: confirmation.release.installSpec ?? null,
         startedAt: now(), updatedAt: now(),
       };
       let locked = false;
@@ -416,7 +511,10 @@ export function createUpdateService({
             await lock.close();
           }
         });
-        const currentRelease = await fetchNpmRelease(fetchImpl, checkTimeoutMs);
+        const currentRelease = await fetchRelease(fetchImpl, {
+          dshVersion: environment.dshVersion ?? undefined,
+          timeoutMs: checkTimeoutMs,
+        });
         if (JSON.stringify(currentRelease) !== JSON.stringify(confirmation.release)) throw updateError('check-expired');
         environment = await runtime.inspect({ preflight: true });
         if (environment.profileDir !== confirmation.profileDir || environment.installationKey !== confirmation.installationKey) {

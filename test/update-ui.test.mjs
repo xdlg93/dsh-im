@@ -171,7 +171,8 @@ test('historical jobs do not suppress a new check or its available version', asy
     assert.match(textOf(details), /最新版本v4\.24\.0/);
     assert.match(textOf(details), /上次更新目标v4\.21\.1/);
     assert.equal(details.findAllByType('dt').some(node => textOf(node) === '目标版本'), false);
-    assert.equal(manualCommandOf(renderer), 'dsh plugin --profile web add -w @xdlg93/dsh-im@4.24.0');
+    assert.equal(manualCommandOf(renderer),
+      'dsh plugin --profile web add -w git+https://github.com/xdlg93/dsh-im.git#v4.24.0');
     await click(renderer, '安装更新');
     assert.equal(calls.at(-1).payload.checkId, 'new-check');
     assert.match(textOf(renderer.toJSON()), /目标版本v4\.24\.0/);
@@ -267,7 +268,7 @@ test('confirmed installation ignores double clicks, polls the Host and stops at 
     pendingInstall.resolve(ok(current));
     await flushMicrotasks();
   });
-  assert.match(textOf(renderer.toJSON()), /正在安装/);
+  assert.match(textOf(renderer.toJSON()), /正在下载并安装/);
   await click(renderer, '关闭');
   current = installing('verifying');
   await tick(t);
@@ -308,7 +309,7 @@ test('a retry after a lost installation response reuses the same request id', as
   assert.deepEqual(requests[1], requests[0]);
 });
 
-test('a failed npm check cannot reuse an earlier up-to-date result', async (t) => {
+test('a failed check cannot reuse an earlier up-to-date result', async (t) => {
   const renderer = await mount(t, async (endpoint) => {
     if (endpoint === 'update.status') {
       return ok(snapshot({ latestVersion: '3.0.8', checkedAt: 1_000, blockedReason: 'no-update' }));
@@ -316,8 +317,8 @@ test('a failed npm check cannot reuse an earlier up-to-date result', async (t) =
     return { ok: false, error: { code: 'check-failed', message: 'npm timed out' } };
   });
   await click(renderer, '检查更新');
-  assert.match(textOf(renderer.toJSON()), /无法访问 npm 或请求超时/);
-  assert.match(manualCommandOf(renderer), /@latest$/);
+  assert.match(textOf(renderer.toJSON()), /无法访问更新源或请求超时/);
+  assert.match(manualCommandOf(renderer), /dsh-im\.git$/);
   assert.doesNotMatch(textOf(renderer.toJSON()), /已是最新版本|当前版本无需更新/);
   assert.equal(buttonNamed(renderer, '安装更新'), undefined);
 });
@@ -592,7 +593,7 @@ test('cancelling an uncertainty poll still resumes polling an accepted active in
     await flushMicrotasks();
   });
   assert.equal(oldSignal.aborted, true);
-  assert.match(textOf(renderer.toJSON()), /正在安装/);
+  assert.match(textOf(renderer.toJSON()), /正在下载并安装/);
   await tick(t);
   assert.deepEqual(states, [null, 'installing', 'restart-required']);
   assert.equal(reads, 3);
@@ -830,8 +831,11 @@ test('manual commands use the current profile and a known target without downgra
   for (const { expected, version, ...fields } of cases) {
     const renderer = await mount(t, async () => ok(snapshot(fields)));
     await click(renderer, fields.blockedReason === 'pending-restart' ? '待手动重启' : '检查更新');
+    const spec = version === 'latest'
+      ? 'git+https://github.com/xdlg93/dsh-im.git'
+      : `git+https://github.com/xdlg93/dsh-im.git#v${version}`;
     assert.equal(manualCommandOf(renderer),
-      `dsh plugin --profile ${expected} add -w @xdlg93/dsh-im@${version}`);
+      `dsh plugin --profile ${expected} add -w ${spec}`);
     assert.equal(renderer.root.findByType('textarea').props.readOnly, true);
     assert.match(textOf(renderer.toJSON()), /自动更新失败可以使用命令更新：/);
     assert.doesNotMatch(textOf(renderer.toJSON()), /通常只需手动重启/);
@@ -859,14 +863,14 @@ test('manual copying uses an accessible icon at the right of the command row', a
   assert.equal(copied.findAllByType('rect').length, 0);
 });
 
-test('manual commands remain available after a failed npm check and explain the latest fallback', async (t) => {
+test('manual commands remain available after a failed check and explain the latest fallback', async (t) => {
   const renderer = await mount(t, async (endpoint) => {
     if (endpoint === 'update.status') return ok(snapshot({ profileName: 'web', environmentKind: 'cli' }));
     throw new Error('npm unavailable');
   });
   await click(renderer, '检查更新');
-  assert.match(manualCommandOf(renderer), /@xdlg93\/dsh-im@latest$/);
-  assert.match(textOf(renderer.toJSON()), /尚未确认目标版本.*执行时 npm 的 latest/);
+  assert.match(manualCommandOf(renderer), /dsh-im\.git$/);
+  assert.match(textOf(renderer.toJSON()), /尚未确认目标版本.*仓库当前 main/);
   assert.match(textOf(renderer.toJSON()), /DSH_HOME 一致/);
   assert.equal(buttonNamed(renderer, '复制命令').props.disabled, false);
   assert.equal(buttonNamed(renderer, '安装更新'), undefined);
@@ -954,7 +958,7 @@ test('an old clipboard result cannot mark a changed command or reopened dialog a
   assert.equal(writes, 1);
   assert.equal(buttonNamed(renderer, '复制中…').props.disabled, true);
   await click(renderer, '重新检查');
-  assert.match(manualCommandOf(renderer), /@3\.0\.10$/);
+  assert.match(manualCommandOf(renderer), /dsh-im\.git#v3\.0\.10$/);
   await act(async () => { pending.resolve(); await flushMicrotasks(); });
   assert.equal(buttonNamed(renderer, '已复制'), undefined);
   await click(renderer, '复制命令');

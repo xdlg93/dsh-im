@@ -10,7 +10,7 @@ export const UPDATE_RPC_CHANNEL = '/dsh-im';
 
 const ACTIVE_STATES = new Set(['installing', 'verifying']);
 const BLOCKED_REASONS = Object.freeze({
-  'source-install': '当前是源码或链接安装，只能检查版本；请手动更新源码，或迁移到 npm 安装。',
+  'source-install': '当前是源码或链接安装，无法自动更新；请按原安装方式用 git 重新安装，或迁移到插件索引安装。',
   'unknown-profile': '无法确认当前 profile，请在对应的 Harness 环境中手动更新。',
   'unsupported-runtime': '当前运行环境不支持按钮安装，请手动更新插件。',
   'registry-conflict': '当前 npm 源配置与官方源不一致，请先检查 registry 配置。',
@@ -20,7 +20,10 @@ const BLOCKED_REASONS = Object.freeze({
 });
 const ERROR_MESSAGES = Object.freeze({
   'not-published': '这个版本还没有发布到 npm，请用 git 方式重新安装来更新。',
-  'check-failed': '无法访问 npm 或请求超时，请稍后重新检查。',
+  'index-unreachable': '无法访问插件索引，请检查网络或代理后重试。',
+  'index-invalid': '插件索引内容无效，暂时无法检查更新。',
+  'no-compatible-release': '索引里没有兼容当前 DSH 版本的新版本，请先升级 DSH。',
+  'check-failed': '无法访问更新源或请求超时，请稍后重新检查。',
   'update-failed': '更新请求失败，请重试。',
   'invalid-release': 'npm 返回的版本信息无效，暂时无法更新。',
   'check-expired': '版本确认已过期，请重新检查后再安装。',
@@ -66,9 +69,17 @@ function presentError(error) {
     ?? (message.slice(0, 400) || '更新请求失败，请重试。');
 }
 
+/** Whole seconds the current job has been running, or null when it has no start. */
+function jobElapsedSeconds(snapshot) {
+  const startedAt = snapshot?.job?.startedAt;
+  if (!Number.isFinite(startedAt)) return null;
+  const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1_000));
+  return seconds > 0 ? seconds : null;
+}
+
 function summary(snapshot, action, error) {
-  if (action === 'checking') return '正在从 npm 检查最新版本…';
-  if (action === 'starting' || snapshot?.job?.state === 'installing') return '正在安装，请稍候…';
+  if (action === 'checking') return '正在检查插件索引里的最新版本…';
+  if (action === 'starting' || snapshot?.job?.state === 'installing') return '正在下载并安装，请稍候…';
   if (snapshot?.job?.state === 'verifying') return '正在校验安装结果…';
   if (snapshot?.job?.state === 'restart-required' || snapshot?.blockedReason === 'pending-restart') {
     return '已安装，待手动重启';
@@ -82,9 +93,9 @@ function summary(snapshot, action, error) {
   if (snapshot?.blockedReason) return '暂时无法安装更新';
   if (snapshot?.canInstall) return '发现新版本';
   if (snapshot?.checkedAt && snapshot.latestVersion === snapshot.runningVersion) return '已是最新版本';
-  if (snapshot?.checkedAt) return '已获取 npm 最新版本';
+  if (snapshot?.checkedAt) return '已获取索引里的最新版本';
   if (snapshot?.job?.state === 'completed') return '更新已生效';
-  return '检查 npm 最新版本，不会自动安装。';
+  return '检查插件索引里的最新版本，不会自动安装。';
 }
 
 function retainDialogFocus(event) {
@@ -113,7 +124,11 @@ function manualUpdateCommand(snapshot) {
     ? [...targets, snapshot.runningVersion, snapshot.installedVersion]
       .filter(validVersion).sort(compareVersionsDescending)[0]
     : 'latest';
-  return `dsh plugin --profile ${profileArgument} add -w @xdlg93/dsh-im@${version}`;
+  // This fork is published through git, so the manual fallback installs the tag.
+  const spec = version === 'latest'
+    ? 'git+https://github.com/xdlg93/dsh-im.git'
+    : `git+https://github.com/xdlg93/dsh-im.git#v${version}`;
+  return `dsh plugin --profile ${profileArgument} add -w ${spec}`;
 }
 
 function ManualUpdateCommand({ command, disabled, sourceInstall, desktop }) {
@@ -171,8 +186,8 @@ function ManualUpdateCommand({ command, disabled, sourceInstall, desktop }) {
           : h(React.Fragment, null,
               h('rect', { x: 7, y: 7, width: 10, height: 11, rx: 1.5 }),
               h('path', { d: 'M5 13H3.5A1.5 1.5 0 0 1 2 11.5v-8A1.5 1.5 0 0 1 3.5 2h8A1.5 1.5 0 0 1 13 3.5V5' }))))),
-      command.endsWith('@xdlg93/dsh-im@latest') ? h('p', { className: 'dim-updateManualHint' },
-        '尚未确认目标版本，此命令安装执行时 npm 的 latest 版本。') : null,
+      command.endsWith('dsh-im.git') ? h('p', { className: 'dim-updateManualHint' },
+        '尚未确认目标版本，此命令安装仓库当前 main 的最新提交。') : null,
       h('p', { className: 'dim-updateManualHint' }, desktop
         ? '请在当前 Desktop 的内置终端执行，完成后手动重启。'
         : '请在运行当前 Harness 的同一环境执行，保持 DSH_HOME 一致，完成后手动重启。'),
@@ -405,6 +420,7 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
   const historicalTargetVersion = !activeJob && !restartRequired ? snapshot?.job?.targetVersion : null;
   const latestVersion = !activeJob && !restartRequired && !error && snapshot?.checkedAt
     ? snapshot.latestVersion : null;
+  const elapsedSeconds = activeJob || action === 'starting' ? jobElapsedSeconds(snapshot) : null;
   const manualCommand = manualUpdateCommand(snapshot);
   const buttonLabel = action === 'checking' ? '检查中…'
     : action === 'starting' || activeJob ? '正在更新…'
@@ -450,6 +466,9 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
             h('dt', null, '最新版本'), h('dd', null, `v${latestVersion}`)) : null,
           historicalTargetVersion ? h(React.Fragment, null,
             h('dt', null, '上次更新目标'), h('dd', null, `v${historicalTargetVersion}`)) : null,
+          snapshot?.releaseSource ? h(React.Fragment, null,
+            h('dt', null, '更新来源'),
+            h('dd', null, snapshot.releaseSource === 'index' ? '插件索引（git）' : 'npm')) : null,
           h('dt', null, '目标 profile'), h('dd', null, snapshot?.profileName ?? '无法确认')),
         h('div', {
           className: `dim-updateStatus${error || failedJob ? ' dim-updateStatusError' : ''}`,
@@ -460,6 +479,8 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
           h('strong', null, summary(snapshot, action, error)),
           activeJob || action === 'starting'
             ? h('p', null, '关闭窗口不会取消安装。请勿同时在其他窗口管理此 profile 的插件。') : null,
+          elapsedSeconds !== null
+            ? h('p', null, localizeTemplate('已用时 {seconds} 秒', { seconds: elapsedSeconds })) : null,
           restartRequired ? h('p', null, BLOCKED_REASONS['pending-restart']) : null,
           failedJob && jobMessage ? h('p', null,
             BLOCKED_REASONS[jobMessage] ?? ERROR_MESSAGES[jobMessage] ?? jobMessage) : null),
@@ -472,7 +493,7 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
           h('strong', null, 'DSH 版本兼容说明'),
           h('p', { className: 'dim-updateManualHint' }, 'dsh-im 1.0.0 起支持 DSH 0.2.2-rc.5 及以上（0.2.x 全系列）。'),
           h('p', { className: 'dim-updateManualHint' }, '已在 DSH 0.2.3-alpha.2 上修复 Cordis 4.2 的根上下文兼容问题。'),
-          h('p', { className: 'dim-updateManualHint' }, '未发布到 npm 时不会自动更新，请按原安装方式用 git 重新安装。')),
+          h('p', { className: 'dim-updateManualHint' }, '更新从插件索引读取版本，按索引里固定的 git commit 安装；未发布到 npm 也能一键更新。')),
         h(ManualUpdateCommand, {
           key: manualCommand ?? 'unavailable', command: manualCommand,
           disabled: busyAction || activeJob || uncertainInstall,
