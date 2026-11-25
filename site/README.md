@@ -17,3 +17,5 @@ npm run publish:index -- --commit "$(git rev-parse v1.0.x)"   # 3. 写入索引
 git add site/index.json && git commit -m "chore: publish 1.0.x in the plugin market index"
 git push origin main              # 4. 推送后 Pages 自动部署
 ```
+
+<!-- pages retry 20261125T064505Z -->
