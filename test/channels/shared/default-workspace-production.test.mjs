@@ -98,3 +98,47 @@ for (const channel of channels) {
     }
   });
 }
+
+test('a bot left on a plugin-picked directory follows the current default', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-default-relocate-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dshHome = join(root, 'home');
+  const reader = join(root, 'DSH', 'workspace');
+  const target = join(root, 'DSH', 'dsh-im');
+  await mkdir(target, { recursive: true });
+  await mkdir(reader, { recursive: true });
+  const legacy = join(dshHome, 'im');
+  await mkdir(legacy, { recursive: true });
+  const path = join(root, 'workspaces.json');
+  const store = await new BotWorkspaceStore(path, {
+    defaultWorkspace: target,
+    ungroupedWorkspace: legacy,
+  }).load();
+  await store.ensure('bot-a');
+  await store.setWorkspace('bot-a', legacy);
+  await store.ensure('bot-b');
+  await store.setWorkspace('bot-b', reader);
+
+  const reloaded = await new BotWorkspaceStore(path, {
+    defaultWorkspace: target,
+    ungroupedWorkspace: legacy,
+  }).load();
+  const moved = await reloaded.relocateLegacyWorkspaces(['bot-a', 'bot-b'], {
+    legacyPaths: [legacy, join(dshHome, 'dsh-im')],
+    target,
+  });
+  assert.deepEqual(moved, ['bot-a']);
+  assert.equal(reloaded.workspaceFor('bot-a'), target);
+  // A directory the reader chose is never relocated.
+  assert.equal(reloaded.workspaceFor('bot-b'), reader);
+
+  const again = await new BotWorkspaceStore(path, {
+    defaultWorkspace: target,
+    ungroupedWorkspace: legacy,
+  }).load();
+  assert.equal(again.workspaceFor('bot-a'), target);
+  assert.deepEqual(await again.relocateLegacyWorkspaces(['bot-a'], {
+    legacyPaths: [legacy],
+    target,
+  }), []);
+});

@@ -1042,6 +1042,34 @@ export class BotWorkspaceStore {
     });
   }
 
+  /**
+   * Point bots that still sit on a directory the plugin picked by itself at the
+   * current default.
+   *
+   * Only plugin-generated directories are relocated: a directory the reader
+   * chose is never touched, and the conversation bindings are kept so a bot
+   * resumes its conversation where the sessions actually are.
+   *
+   * @returns the bot ids that moved.
+   */
+  async relocateLegacyWorkspaces(botIds, { legacyPaths = [], target } = {}) {
+    if (typeof target !== 'string' || !isAbsolute(target)) return [];
+    const legacy = new Set(legacyPaths
+      .filter((path) => typeof path === 'string' && isAbsolute(path))
+      .map((path) => resolve(path)));
+    if (legacy.size === 0) return [];
+    const moved = [];
+    for (const botId of botIds) {
+      const id = botIdOf(botId);
+      const current = this.#workspaces[id];
+      if (!current || !legacy.has(resolve(current))) continue;
+      this.#workspaces[id] = resolve(target);
+      moved.push(id);
+    }
+    if (moved.length > 0) await this.#persist();
+    return moved;
+  }
+
   async setWorkspace(botId, value, { clearSessions, incarnation } = {}) {
     const id = botIdOf(botId);
     if (this.conversationDirectoryFor(id).enabled) throw workspaceManualEditDisabled();

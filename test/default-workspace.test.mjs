@@ -9,6 +9,8 @@ import {
   defaultImWorkspace,
   dshWorkspacePaths,
   IM_WORKSPACE_DIRECTORY,
+  isReaderWorkspace,
+  legacyImWorkspaces,
   prepareBotWorkspace,
 } from '../src/channels/shared/default-workspace.mjs';
 import { HarnessClient } from '../src/channels/shared/harness-client.mjs';
@@ -533,4 +535,23 @@ test('a plugin fiber declared with workspaceRegistry can read the Workspace list
   assert.deepEqual(seen.paths, ['/home/xdl/DSH/workspace']);
   assert.equal(seen.default, '/home/xdl/DSH/dsh-im');
   assert.equal(seen.controller, 'function');
+});
+
+test('the anchor skips the plugin directories and state inside the DSH home', async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-im-anchor-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dshHome = join(root, 'home');
+  const reader = join(root, 'DSH', 'workspace');
+  // The bot directory and the DSH home are never anchors, even when registered
+  // first: anchoring on them would walk the default one level further each start.
+  assert.equal(defaultImWorkspace({ dshHome }, {
+    dshWorkspaces: [join(dshHome, 'im'), join(dshHome, 'dsh-im'), reader],
+  }), join(root, 'DSH', 'dsh-im'));
+  assert.equal(isReaderWorkspace(join(dshHome, 'im'), dshHome), false);
+  assert.equal(isReaderWorkspace(join(dshHome, 'dsh-im'), dshHome), false);
+  assert.equal(isReaderWorkspace(join(root, 'elsewhere', 'dsh-im'), dshHome), false);
+  assert.equal(isReaderWorkspace(reader, dshHome), true);
+  // Only plugin-generated directories count as legacy.
+  assert.deepEqual(legacyImWorkspaces({ dshHome }), [join(dshHome, 'im'), join(dshHome, 'dsh-im')]);
+  assert.equal(defaultImWorkspace({ dshHome }, { dshWorkspaces: [join(dshHome, 'im')] }), join(dshHome, 'im'));
 });

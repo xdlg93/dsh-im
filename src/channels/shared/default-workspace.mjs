@@ -1,6 +1,6 @@
 import { mkdir, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 
 /**
  * Read one Host service from a context.
@@ -59,12 +59,44 @@ export function dshWorkspacePaths(ctx) {
  * the historical `<dshHome>/im` directory stays the answer, so headless Hosts and
  * existing installations keep working.
  */
+/** The DSH home the plugin stores its own state in. */
+export function imDshHome(config = {}) {
+  return resolve(config.dshHome ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'));
+}
+
+/**
+ * Whether a registered Workspace is somewhere the reader actually works.
+ *
+ * The plugin's own directories get registered as Workspaces too, so anchoring on
+ * "the first registered Workspace" would drift: the bot directory becomes a
+ * Workspace, then becomes the anchor, then the next directory is derived from
+ * it. Anything inside the DSH home is plugin or state data, and the plugin's own
+ * directory name is never an anchor.
+ */
+export function isReaderWorkspace(path, dshHome) {
+  if (typeof path !== 'string' || !isAbsolute(path)) return false;
+  const resolved = resolve(path);
+  const home = resolve(dshHome);
+  if (resolved === home || resolved.startsWith(`${home}/`)) return false;
+  return basename(resolved) !== IM_WORKSPACE_DIRECTORY;
+}
+
 export function defaultImWorkspace(config = {}, { dshWorkspaces = [] } = {}) {
-  const [workspace] = (Array.isArray(dshWorkspaces) ? dshWorkspaces : [])
-    .filter((path) => typeof path === 'string' && isAbsolute(path));
-  if (workspace) return resolve(dirname(resolve(workspace)), IM_WORKSPACE_DIRECTORY);
-  const dshHome = config.dshHome ?? process.env.DSH_HOME ?? join(homedir(), '.dsh');
+  const dshHome = imDshHome(config);
+  const anchor = (Array.isArray(dshWorkspaces) ? dshWorkspaces : [])
+    .find((path) => isReaderWorkspace(path, dshHome));
+  if (anchor) return resolve(dirname(resolve(anchor)), IM_WORKSPACE_DIRECTORY);
   return resolve(dshHome, 'im');
+}
+
+/**
+ * Directories the plugin used to pick on its own. A bot still pointing at one of
+ * them was never moved by the reader, so startup may relocate it to the current
+ * default without guessing what the reader wanted.
+ */
+export function legacyImWorkspaces(config = {}) {
+  const dshHome = imDshHome(config);
+  return [resolve(dshHome, 'im'), resolve(dshHome, IM_WORKSPACE_DIRECTORY)];
 }
 
 /**

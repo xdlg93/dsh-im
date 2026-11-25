@@ -16,7 +16,7 @@ import {
   createWorkspaceAwareController,
   observeBotWorkspaceRemovals,
 } from '../../../../src/channels/shared/bot-workspace-store.mjs';
-import { adoptDshWorkspace, dshWorkspacePaths, prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
+import { adoptDshWorkspace, dshWorkspacePaths, legacyImWorkspaces, prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
 import { listAgentPresetCatalog } from '../../../../src/channels/shared/agent-preset.mjs';
 import { listModelCatalog } from '../../../../src/channels/shared/model-setting.mjs';
 import { createDeliveryAdapter } from '../../delivery-adapter.mjs';
@@ -69,6 +69,12 @@ export async function createProductionController(ctx, config = {}, internals = {
     ?? await new WorkspaceStore(paths.workspaces, { defaultWorkspace, ungroupedWorkspace, groupByAgentPreset: config.groupByAgentPreset }).load();
   const configuredBots = configStore.list();
   await workspaces.reconcile(configuredBots.map((bot) => bot.botId));
+  // A bot still on a directory the plugin picked by itself follows the current
+  // default; a directory the reader chose is never touched.
+  await workspaces.relocateLegacyWorkspaces?.(configuredBots.map((bot) => bot.botId), {
+    legacyPaths: legacyImWorkspaces(config),
+    target: defaultWorkspace,
+  });
   await Promise.all(configuredBots.map((bot) => workspaces.ensure(bot.botId, {
     defaultAgentPreset: config.agentPreset,
     initialAccessPolicy: initialAccessPolicyFor('qq', bot),
