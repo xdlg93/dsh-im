@@ -16,6 +16,10 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          # The lockfile is lockfileVersion 9, produced by pnpm 11; pin the major
+          # so CI resolves the same dependency graph.
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
