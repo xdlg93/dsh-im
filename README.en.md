@@ -76,17 +76,54 @@ Then install "DSH IM bots (WeChat + QQ)" from the results. Until Pages is live, 
 **From Git** — run this in the terminal that starts your Harness, then restart `dsh web` and refresh the browser:
 
 ```sh
-dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
 ```
 
 **DSH Desktop** — run this in Desktop's built-in terminal, then quit and reopen Desktop:
 
 ```sh
-dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
 ```
 
-`--profile` must name the profile you actually run; `add` works as a synonym for `install`. Swap `#v1.0.1` for
+`--profile` must name the profile you actually run; `add` works as a synonym for `install`. Swap `#v1.3.1` for
 another tag (or drop it to follow `main`) to upgrade or roll back.
+
+### When the network blocks github.com
+
+Both the plugin index and the Git command make `pnpm` run `git clone` against github.com directly. That step
+**does not go through the npm registry and does not use npm's proxy settings**, so a blocked network fails with
+`fatal: unable to access 'https://github.com/xdlg93/dsh-im.git/': Recv failure: Connection was reset`.
+
+Three ways out, any one is enough:
+
+**1) Give the DSH process a proxy** — git children inherit `HTTPS_PROXY`. With systemd:
+
+```sh
+sudo systemctl edit dsh-web
+# add inside the editor:
+#   [Service]
+#   Environment=HTTPS_PROXY=http://127.0.0.1:7890
+#   Environment=HTTP_PROXY=http://127.0.0.1:7890
+sudo systemctl restart dsh-web
+```
+
+Starting it by hand with `HTTPS_PROXY=http://127.0.0.1:7890 dsh web` works the same way.
+
+**2) Point git at the proxy** (git only):
+
+```sh
+git config --global http.proxy http://127.0.0.1:7890
+# undo: git config --global --unset http.proxy
+```
+
+**3) Install from the release tarball** — no git, no npm account, only `xdlg93.github.io`:
+
+```sh
+dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz
+```
+
+Every release leaves `docs/pkg/dsh-im-<version>.tgz` behind, and the URL follows the same rule. The plugin's
+"check for updates" keeps reading the plugin index; update a tarball install by repeating that command.
 
 **From the DSH UI** — ask the agent to install the same Git address through `plugin_manager install_bundle`, or add it to the profile's `package.json` yourself. Either way, restart the Host when the install finishes.
 

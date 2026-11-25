@@ -74,17 +74,53 @@ https://xdlg93.github.io/dsh-im/index.json
 **从 Git 安装**：在启动当前 Harness 的终端里执行，然后重启 `dsh web` 并刷新浏览器：
 
 ```sh
-dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
 ```
 
 **DSH Desktop**：在 Desktop 的内置终端中执行，然后完全退出并重新打开 Desktop：
 
 ```sh
-dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.0.1
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
 ```
 
-`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。把 `#v1.0.1`
+`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。把 `#v1.3.1`
 换成需要的 tag（或省略它取 `main`）即可升级或回退。
+
+### 网络受限时（git 需要直连 github.com）
+
+从插件索引或 Git 安装都会让 `pnpm` **直接 `git clone` github.com**，这一步**不经过 npm 源，也不吃 npm 的代理配置**。国内直连失败时会看到
+`fatal: unable to access 'https://github.com/xdlg93/dsh-im.git/': Recv failure: Connection was reset`。
+
+三种做法，任选其一：
+
+**1）给 DSH 进程设置代理环境变量**（git 子进程会继承 `HTTPS_PROXY`）。以 systemd 为例：
+
+```sh
+sudo systemctl edit dsh-web
+# 在打开的编辑器里加入：
+#   [Service]
+#   Environment=HTTPS_PROXY=http://127.0.0.1:7890
+#   Environment=HTTP_PROXY=http://127.0.0.1:7890
+sudo systemctl restart dsh-web
+```
+
+命令行启动时直接 `HTTPS_PROXY=http://127.0.0.1:7890 dsh web` 同样有效。
+
+**2）让 git 自己走代理**（只影响 git）：
+
+```sh
+git config --global http.proxy http://127.0.0.1:7890
+# 取消：git config --global --unset http.proxy
+```
+
+**3）用 tgz 直链安装**（不需要 git，也不需要 npm 账号，只访问 `xdlg93.github.io`）：
+
+```sh
+dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz
+```
+
+每个版本都会在 `docs/pkg/` 留一份 `dsh-im-<版本>.tgz`，地址规则相同。tgz 安装后插件内的「检查更新」仍按插件索引工作；
+需要更新时重复上面这条命令即可。
 
 **在 DSH 界面里安装**：也可以让 Agent 通过插件管理工具用 `plugin_manager install_bundle` 安装同一个 Git 地址，或直接编辑 profile 的 `package.json` 依赖后重启。无论哪种方式，安装完成后都要重启 Host。
 

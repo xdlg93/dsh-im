@@ -5,6 +5,8 @@ coverage/
 .env.*
 !.env.example
 *.tgz
+# Release tarballs served by the Pages site are deliverables, not build output.
+!docs/pkg/*.tgz
 .DS_Store
 .idea/
 e2e/

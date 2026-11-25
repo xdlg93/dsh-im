@@ -400,6 +400,7 @@ const EN = Object.freeze({
   '正在下载并安装，请稍候…': 'Downloading and installing, please wait…',
   '已用时 {seconds} 秒': 'Elapsed: {seconds}s',
   '尚未确认目标版本，此命令安装仓库当前 main 的最新提交。': 'The target version is not confirmed yet, so this command installs the latest commit on the repository main branch.',
+  '安装失败。从插件索引安装需要用 git 访问 github.com：请给 DSH 进程设置 HTTPS_PROXY，或执行 git config --global http.proxy <代理地址> 后重试；也可以改用下方的 tgz 直链命令。': 'Install failed. Installing from the plugin index runs git against github.com: set HTTPS_PROXY for the DSH process, or run git config --global http.proxy <proxy> and retry; the tgz command below is an alternative that needs no git.',
   '填入示例': 'Use example',
   '清空': 'Clear',
   '选择在哪些会话中启用、提供哪些来源字段，以及如何使用这些信息。仅使用已有消息元数据，不查询平台 API。': 'Choose which conversations to enhance, which source fields to include, and how to use them. Only existing message metadata is used; no platform APIs are queried.',

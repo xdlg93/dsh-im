@@ -29,7 +29,7 @@ const ERROR_MESSAGES = Object.freeze({
   'check-expired': '版本确认已过期，请重新检查后再安装。',
   'installation-changed': '插件安装状态已发生变化，请重新检查。',
   'update-busy': '此 profile 正在更新，请稍后查看状态。',
-  'install-failed': '安装失败，请检查当前安装状态后重试。',
+  'install-failed': '安装失败。从插件索引安装需要用 git 访问 github.com：请给 DSH 进程设置 HTTPS_PROXY，或执行 git config --global http.proxy <代理地址> 后重试；也可以改用下方的 tgz 直链命令。',
   'verify-failed': '安装结果校验失败，请手动检查插件版本。',
   'state-unavailable': '无法安全保存更新状态，请先检查当前安装结果。',
   interrupted: '上次更新已中断，请检查安装状态后重试。',

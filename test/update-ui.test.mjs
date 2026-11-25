@@ -685,7 +685,7 @@ test('disk changes and a persisted failure render actionable localized status', 
   })));
   await click(failed, '检查更新');
   assert.match(textOf(failed.toJSON()), /上次更新目标v3.0.9/);
-  assert.match(textOf(failed.toJSON()), /安装失败，请检查当前安装状态后重试/);
+  assert.match(textOf(failed.toJSON()), /安装失败。从插件索引安装需要用 git 访问 github\.com/);
   assert.doesNotMatch(textOf(failed.toJSON()), /install-failed/);
 
   const uncertain = await mount(t, async () => ok(snapshot({
