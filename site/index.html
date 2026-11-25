@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dsh-im 插件索引</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1f2329;
+    --muted: #61666d;
+    --bg: #ffffff;
+    --card: #f6f7f9;
+    --line: #e5e6eb;
+    --accent: #1677ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e8e9eb; --muted: #9aa0a6; --bg: #17181a; --card: #1f2124; --line: #2c2f33; --accent: #5aa2ff; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 24px;
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  p { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 0 0 20px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; word-break: break-all; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>dsh-im 插件索引</h1>
+  <p>这是 DeepSeek Harness 的插件市场索引，只包含微信与 QQ 两个扫码通道。</p>
+
+  <div class="card">
+    <strong>在 DSH 里添加索引</strong>
+    <p style="margin:8px 0 0">设置 → 插件 → 发现 → 添加索引源，粘贴下面这个地址：</p>
+    <p style="margin:8px 0 0"><code>https://xdlg93.github.io/dsh-im/index.json</code></p>
+  </div>
+
+  <div class="card">
+    <strong>直接安装</strong>
+    <p style="margin:8px 0 0"><code>dsh plugin --profile web add git+https://github.com/xdlg93/dsh-im.git</code></p>
+  </div>
+
+  <ul>
+    <li><a href="index.json">index.json</a> — format 1 索引文档</li>
+    <li><a href="https://github.com/xdlg93/dsh-im">github.com/xdlg93/dsh-im</a> — 源码与说明</li>
+    <li><a href="https://github.com/xdlg93/dsh-im/blob/main/CHANGELOG.md">CHANGELOG</a> — 版本记录</li>
+  </ul>
+</main>
+</body>
+</html>
