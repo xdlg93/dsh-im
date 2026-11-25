@@ -53,6 +53,18 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "publishTimestamp": 1795588893,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/xdlg93/dsh-im",
+            "commit": "fc695f016a7a6d2729b38ca5ebf4af8a99e80de3"
+          },
+          "engines": {
+            "dsh": "^0.2.2-rc.5"
+          }
+        },
+        {
           "version": "1.0.0",
           "publishTimestamp": 1795587427,
           "source": {
