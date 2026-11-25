@@ -1,4 +1,5 @@
 import { modernHarnessApi } from './modern-harness-api.mjs';
+import { hostRoot } from './host-root.mjs';
 
 /** Connect to this Host directly unless an external Harness URL was configured. */
 export function harnessConnection(ctx, config = {}, { competitiveApprovals = false } = {}) {
@@ -11,6 +12,6 @@ export function harnessConnection(ctx, config = {}, { competitiveApprovals = fal
     competitiveApprovals,
     // Cordis child contexts share one root; different Hosts must not share
     // ownership of pending questions and approvals.
-    interactionScope: ctx.root ?? ctx,
+    interactionScope: hostRoot(ctx),
   };
 }

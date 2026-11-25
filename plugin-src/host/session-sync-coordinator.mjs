@@ -11,6 +11,7 @@ import {
 } from '../../src/channels/shared/delivery-sync-settings.mjs';
 import { getDeliverySyncSettingsStore } from '../../src/channels/shared/delivery-sync-settings-store.mjs';
 import { deliverSessionSyncMirror } from '../../src/channels/shared/session-sync-registry.mjs';
+import { hostRoot } from './host-root.mjs';
 
 /**
  * Where the turn came from, as far as a chat mirror is concerned.
@@ -135,10 +136,10 @@ export function createSessionSyncCoordinator({
     }
   };
 
-  // A channel may render the answer itself — the Feishu process card does — so a
-  // target is not automatically a text recipient. A pending card is not proof of
-  // delivery either: the renderer is asked first and only the targets it did not
-  // confirm receive the text. Targets without a renderer keep the text path.
+  // A channel may render the answer itself as a card, so a target is not
+  // automatically a text recipient. A pending card is not proof of delivery
+  // either: the renderer is asked first and only the targets it did not confirm
+  // receive the text. Targets without a renderer keep the text path.
   const renderFinalAnswer = async (targets, sessionId, turn, text) => {
     if (!Number.isSafeInteger(turn)) return targets.map(() => false);
     return await Promise.all(targets.map(async (target) => {
@@ -166,10 +167,7 @@ export function createSessionSyncCoordinator({
     if (pending.length === 0) return true;
     const results = await Promise.allSettled(pending.map((target) => (
       deliveryService.sendSessionSyncText(
-        target.botId, target.targetId, sessionId, text,
-        // Feishu renders its own card; preserve its plain fallback instead of
-        // attempting another rich card.
-        { format: target.channel === 'feishu' ? 'plain' : format },
+        target.botId, target.targetId, sessionId, text, { format },
       )
     )));
     results.forEach((result, index) => {
@@ -363,7 +361,7 @@ export function isImOwnedInput(scope, event) {
 
 export function installSessionSyncCoordinator(ctx, deliveryService, {
   logger = console,
-  inputScope = ctx?.root ?? ctx,
+  inputScope = hostRoot(ctx),
   loadSettings = null,
   imInputOwnership = isImOwnedInput,
   config = {},

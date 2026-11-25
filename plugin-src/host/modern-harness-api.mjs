@@ -4,6 +4,7 @@ import { activeHarnessInteractionOwner, clearModelCatalogCache, hasActiveHarness
 import { extractConnectionEvidence } from '../../src/channels/shared/connection-error.mjs';
 import { harnessPeer } from './harness-peer.mjs';
 import { sameWorkspacePath } from '../../src/channels/shared/default-workspace.mjs';
+import { hostRoot } from './host-root.mjs';
 
 const modernApis = new WeakMap();
 
@@ -961,7 +962,7 @@ class ModernHarnessApi {
 
 /** Create one modern compatibility API per Cordis Host root. */
 export function modernHarnessApi(ctx, { deliveryService } = {}) {
-  const scope = ctx?.root ?? ctx;
+  const scope = hostRoot(ctx);
   if (!scope || !['object', 'function'].includes(typeof scope)) {
     throw new TypeError('dsh-im requires a Cordis Host context');
   }
