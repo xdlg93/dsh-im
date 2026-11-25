@@ -138,6 +138,28 @@ Prefer picking from past conversations. Only when the target is missing from the
 
 Platform ID strings must be non-empty and free of leading or trailing whitespace. A target accepts only the fields its channel and type require; extra fields are rejected.
 
+## The WeChat session window and queued delivery
+
+WeChat iLink only accepts a send while the **conversation session is open**. Once it expires the platform answers `errcode -14` (`session timeout`), and no client-side retry can reopen it — only the recipient writing to the bot does.
+
+This fork turns that limit into working behaviour:
+
+- A send that meets `-14` is **not lost**. It is written to a durable queue in the account state (`outbox` in `~/.dsh/integrations/dsh-weixin/accounts/<botId>/state.json`) and the call returns `{ "sent": false, "queued": true, "reason": "session-timeout", "pending": 1 }`.
+- The next time the recipient writes to the bot, the queue is delivered in order with the refreshed `context_token`. Entries live for 7 days, at most 50 per account.
+- Every other refusal (for example `-2 prepare failed`) still raises: that is usually content, quota or permission, and queueing would only hide it.
+- When a multi-part send is refused halfway, only the **remaining parts** are queued; parts already accepted are never resent.
+
+Callers therefore have three outcomes to tell apart: `sent: true` (handed to the platform), `queued: true` (stored until the session reopens), or a thrown error (a real failure).
+
+## Send from the agent tools
+
+The assistant can push without any external script:
+
+- `dsh_im_targets` — list the delivery targets configured for this profile (`botId`, `channel`, `targetId`, `name`, `kind`, `route`).
+- `dsh_im_send` — push text to one `botId` + `targetId`; arguments `botId`, `targetId`, `text`, optional `format: plain|markdown`.
+
+`{ delivered: true, queued: false }` means the platform accepted it. `{ delivered: false, queued: true, ... }` means the message sits in the WeChat queue, so the assistant must say it is queued until the recipient writes again, never that it arrived.
+
 ## Send through HTTP POST
 
 A plain external application can call the Host's proactive delivery endpoint directly:
@@ -353,7 +375,7 @@ The HTTP layer may also return `method-not-allowed` (405), `unsupported-media-ty
 - While a bot is offline you can still edit targets, but you cannot test or send.
 - WeChat proactive delivery, connection tests, and deferred task results use the `context_token` of the corresponding user the bot most recently received a message from. That context lives only in the Host's account state, survives restarts, and is never stored in a delivery target or returned to callers; rebinding with new login credentials clears it. After an upgrade, the bot needs one inbound user message before the cache exists.
 - Whether WeChat accepts a send still depends on iLink server rules. A healthy long poll does not guarantee proactive sends; if `ret=-2 prepare failed` persists, do not send heartbeats to extend the session. Have the target user send a message and retry. That error is neither proof of expired credentials nor proof that the context expired or the quota ran out.
-- WeChat proactive long text keeps the 1,800-character budget, and Markdown code fences are closed in every chunk. Each chunk consumes a platform send; splitting does not lift platform quotas. On rejection or an uncertain result the plugin stops and reports failure without resending accepted chunks, and diagnostics name the failed chunk and the total.
+- WeChat proactive long text keeps the 1,800-character budget, and Markdown code fences are closed in every chunk. Each chunk consumes a platform send; splitting does not lift platform quotas. A rejection caused by an expired session (`-14`) queues the remaining chunks until the session reopens; any other rejection, or an uncertain result, stops and reports failure without resending accepted chunks. Diagnostics name the failed chunk and the total.
 - A failed WeChat proactive send stays in the account's last-message error with the platform error code and masked diagnostics such as whether context was attached. Health polling does not clear it; a later successful delivery does. HTTP/RPC still returns `delivery-failed` and never retries or drops the healthy long-poll connection.
 - QQ proactive sends are subject to platform message quotas and file upload quotas; an exhausted quota returns an explicit error so the caller can retry later.
 

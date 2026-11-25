@@ -4,6 +4,24 @@
 
 版本号遵循语义化版本；`1.0.0` 是本 fork 的起点，与上游 5.10.0 没有版本号对应关系。
 
+## 1.1.0 — 2026-11-25
+
+### 新增
+
+- **微信主动推送**：iLink 只在会话有效期内接受发送，过期后返回 `errcode -14`（`session timeout`），
+  客户端无法自行续期。现在这类消息不再丢失：写入账号状态的持久化队列（`outbox`，保留 7 天、
+  每账号最多 50 条），并返回 `{ sent: false, queued: true, reason: "session-timeout", pending }`；
+  对方下次给机器人发消息时按顺序自动投递并刷新 `context_token`。多段发送中途被拒时只把剩余段入队，
+  已送达的段不重发。其他拒发原因（如 `-2 prepare failed`）仍然直接报错，不被排队掩盖。
+- **两个 Agent 工具**：`dsh_im_targets` 列出当前 profile 的投递目标（botId、channel、targetId、
+  name、kind、route），`dsh_im_send` 向指定 `botId + targetId` 推送文字，可选 `format`。
+  返回值区分 `delivered: true` 与 `queued: true`，并在系统提示里要求助手不要把排队说成已送达。
+
+### 变更
+
+- 投递链路（`target.send`、`target.test`、会话同步镜像）会把 `queued` 原样上报，不再把它压成 `sent: true`；
+  微信投递页显示平台限制说明，测试按钮在排队时提示“会话已超时，已排队”。
+
 ## 1.0.1 — 2026-11-25
 
 ### 修复

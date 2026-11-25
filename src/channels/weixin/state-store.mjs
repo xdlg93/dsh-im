@@ -1,7 +1,7 @@
 import { weixinStageError } from './connection-error.mjs';
 import { deferredStateAccess, normalizeDeferredState } from '../shared/deferred-state.mjs';
 import { createSessionRingSupport, normalizePendingTitles, normalizeSessionRings } from '../shared/session-ring-support.mjs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -20,6 +20,13 @@ export const WEIXIN_RECENT_OUTBOUND_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 export const WEIXIN_RECENT_OUTBOUND_TEXT_LIMIT = 8_000;
 export const WEIXIN_RECENT_OUTBOUND_MATCH_TOLERANCE_MS = 15_000;
 const CONTEXT_TOKEN_LIMIT = 1_000;
+// A proactive message that iLink refused because the conversation session had
+// expired is worth keeping: the session reopens as soon as the recipient writes
+// again, and the message is delivered then. The queue is bounded so a bot that
+// nobody talks to cannot grow the state file without limit.
+export const WEIXIN_OUTBOX_LIMIT = 50;
+export const WEIXIN_OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+export const WEIXIN_OUTBOX_TEXT_LIMIT = 8_000;
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -48,6 +55,32 @@ function normalizeContextTokens(value) {
     };
   }
   return { credentialHash: value.credentialHash, users };
+}
+
+function normalizeOutbox(value, now = Date.now()) {
+  if (!Array.isArray(value)) return [];
+  const entries = [];
+  for (const entry of value) {
+    const id = nonEmptyString(entry?.id);
+    const toUserId = nonEmptyString(entry?.toUserId);
+    const text = typeof entry?.text === 'string' ? entry.text : '';
+    const createdAt = timestamp(entry?.createdAt);
+    if (!id || !toUserId || !text.trim() || createdAt === null) continue;
+    if (now - createdAt > WEIXIN_OUTBOX_TTL_MS) continue;
+    entries.push({
+      id,
+      toUserId,
+      text: text.slice(0, WEIXIN_OUTBOX_TEXT_LIMIT),
+      format: entry?.format === 'markdown' ? 'markdown' : 'plain',
+      createdAt,
+      attempts: Number.isSafeInteger(entry?.attempts) && entry.attempts >= 0 ? entry.attempts : 0,
+      lastError: nonEmptyString(entry?.lastError),
+    });
+  }
+  // Oldest first: delivery order is the order the caller asked for. The sort is
+  // stable, so messages queued in the same millisecond keep their queue order.
+  entries.sort((left, right) => left.createdAt - right.createdAt);
+  return entries.slice(-WEIXIN_OUTBOX_LIMIT);
 }
 
 function providerMessageIds(value) {
@@ -112,6 +145,7 @@ function normalizeState(value) {
     getUpdatesBuf: typeof value.getUpdatesBuf === 'string' ? value.getUpdatesBuf : '',
     recentOutboundMessages: recentOutboundMessages(value.recentOutboundMessages),
     ...(contextTokens ? { contextTokens } : {}),
+    ...(normalizeOutbox(value.outbox).length ? { outbox: normalizeOutbox(value.outbox) } : {}),
     ...(Object.keys(rings).length ? { rings } : {}),
     ...(Object.keys(pendingTitles).length ? { pendingTitles } : {}),
   };
@@ -158,6 +192,54 @@ export class WeixinStateStore {
 
   contextTokenFor(userId) {
     return this.#state.contextTokens?.users?.[userId]?.token ?? undefined;
+  }
+
+  /**
+   * Queue one proactive message that the platform refused because the
+   * conversation session had expired. The queue is per recipient and ordered.
+   */
+  async enqueueOutbox({ toUserId, text, format = 'plain', reason = null }) {
+    const recipient = nonEmptyString(toUserId);
+    const body = typeof text === 'string' ? text.slice(0, WEIXIN_OUTBOX_TEXT_LIMIT) : '';
+    if (!recipient || !body.trim()) throw new TypeError('toUserId and text are required');
+    const entry = {
+      id: randomUUID(),
+      toUserId: recipient,
+      text: body,
+      format: format === 'markdown' ? 'markdown' : 'plain',
+      createdAt: Date.now(),
+      attempts: 1,
+      lastError: nonEmptyString(reason),
+    };
+    const entries = [...normalizeOutbox(this.#state.outbox), entry].slice(-WEIXIN_OUTBOX_LIMIT);
+    this.#state.outbox = entries;
+    await this.#persist();
+    return { ...entry, pending: entries.filter((item) => item.toUserId === recipient).length };
+  }
+
+  /** Queued proactive messages, oldest first; omit `toUserId` for every recipient. */
+  listOutbox(toUserId = undefined) {
+    const entries = normalizeOutbox(this.#state.outbox);
+    const recipient = nonEmptyString(toUserId);
+    return structuredClone(recipient ? entries.filter((entry) => entry.toUserId === recipient) : entries);
+  }
+
+  /** Drop one queued message, or every message of one recipient. */
+  async removeOutbox({ id = undefined, toUserId = undefined } = {}) {
+    const entries = normalizeOutbox(this.#state.outbox);
+    const target = nonEmptyString(id);
+    const recipient = nonEmptyString(toUserId);
+    const kept = entries.filter((entry) => {
+      if (target) return entry.id !== target;
+      if (recipient) return entry.toUserId !== recipient;
+      return false;
+    });
+    const removed = entries.length - kept.length;
+    if (removed === 0) return 0;
+    if (kept.length) this.#state.outbox = kept;
+    else delete this.#state.outbox;
+    await this.#persist();
+    return removed;
   }
 
   async rememberContextToken({ userId, contextToken, seq, messageTimeMs }) {

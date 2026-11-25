@@ -774,3 +774,82 @@ test('runtime retries a transient notifyStart failure before reporting the accou
   assert.equal(startCalls, 2);
   await runtime.stop();
 });
+
+test('a proactive message refused with a session timeout is queued and delivered on the next inbound message', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-outbox-runtime-'));
+  const path = join(root, 'state.json');
+  const sends = [];
+  let sessionOpen = false;
+  let deliver = null;
+  const state = await new WeixinStateStore(path).load();
+  const runtime = new WeixinRuntime({
+    api: {
+      notifyStart: async () => {}, notifyStop: async () => {},
+      getUpdates: ({ signal }) => new Promise((resolve, reject) => {
+        deliver = resolve;
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+      sendText: async (request) => {
+        sends.push(request);
+        if (!sessionOpen) throw new WeixinApiError('send-rejected', 'session timeout', { providerCode: '-14' });
+        return { ret: 0 };
+      },
+    },
+    config: { botId: 'test-bot', baseUrl: 'https://ilinkai.weixin.qq.com/', ownerUserId: 'owner' },
+    token: 'login', harness: { ensureRunning: async () => true }, state,
+    logger: { warn() {}, error() {}, info() {} },
+  });
+  await runtime.start();
+  try {
+    await eventually(() => typeof deliver === 'function', 'polling started');
+    const queued = await runtime.sendProactiveText(
+      { kind: 'user', route: { toUserId: 'owner' } }, 'queued while the session was closed',
+    );
+    assert.equal(queued.sent, false);
+    assert.equal(queued.queued, true);
+    assert.equal(queued.reason, 'session-timeout');
+    assert.equal(queued.pending, 1);
+    assert.equal(sends.length, 1, 'the refused attempt is not retried');
+    assert.deepEqual(runtime.proactiveOutbox().map((entry) => entry.text), ['queued while the session was closed']);
+
+    // The recipient writes again: the session reopens and the queue drains.
+    sessionOpen = true;
+    deliver({
+      ret: 0, get_updates_buf: 'cursor-2',
+      msgs: [{
+        message_id: 'reopen-1', seq: '2', message_type: 1, from_user_id: 'owner',
+        context_token: 'fresh-context', item_list: [{ type: 1, text_item: { text: 'hello again' } }],
+      }],
+    });
+    await eventually(() => runtime.proactiveOutbox().length === 0, 'the queued message was delivered');
+    // The reopened session also answers the inbound message, so look the queued
+    // text up instead of assuming it is the last send.
+    const flushed = sends.find((request) => request.text === 'queued while the session was closed'
+      && request.contextToken === 'fresh-context');
+    assert.ok(flushed, 'the queued text must be sent with the refreshed context token');
+  } finally { await runtime.stop(); }
+});
+
+test('a queued message that is still undeliverable stays in the outbox', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-outbox-stuck-'));
+  const state = await new WeixinStateStore(join(root, 'state.json')).load();
+  const runtime = new WeixinRuntime({
+    api: {
+      notifyStart: async () => {}, notifyStop: async () => {},
+      getUpdates: ({ signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+      sendText: async () => { throw new WeixinApiError('send-rejected', 'session timeout', { providerCode: '-14' }); },
+    },
+    config: { botId: 'test-bot', baseUrl: 'https://ilinkai.weixin.qq.com/', ownerUserId: 'owner' },
+    token: 'login', harness: { ensureRunning: async () => true }, state,
+    logger: { warn() {}, error() {}, info() {} },
+  });
+  await runtime.start();
+  try {
+    await runtime.sendProactiveText({ kind: 'user', route: { toUserId: 'owner' } }, 'stuck');
+    assert.equal(runtime.proactiveOutbox().length, 1);
+    assert.equal(await runtime.flushOutbox('owner'), 0);
+    assert.equal(runtime.proactiveOutbox().length, 1, 'a failed flush must keep the message');
+  } finally { await runtime.stop(); }
+});

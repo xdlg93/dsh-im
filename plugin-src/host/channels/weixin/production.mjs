@@ -204,6 +204,9 @@ export async function createProductionController(ctx, config = {}, internals = {
         },
       });
     },
+    // The outbox is readable while the bot is offline, so the settings page can
+    // show what is waiting for the next inbound message.
+    stateFor,
     deleteState: async ({ botId }) => {
       const state = stateForSync(botId);
       forget(botId);

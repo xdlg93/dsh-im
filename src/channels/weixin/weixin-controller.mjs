@@ -66,6 +66,7 @@ export class WeixinController {
   #configStore;
   #createRuntime;
   #deleteState;
+  #stateFor;
   #diagnostics;
   #runtimes = new Map();
   #errors = new Map();
@@ -81,6 +82,9 @@ export class WeixinController {
     configStore,
     createRuntime,
     deleteState = async () => {},
+    // Reads the account state for the proactive outbox while the bot is offline;
+    // a connected runtime answers from the same store.
+    stateFor = null,
     logger = console,
     diagnostics,
   }) {
@@ -105,6 +109,7 @@ export class WeixinController {
     this.#configStore = configStore;
     this.#createRuntime = createRuntime;
     this.#deleteState = deleteState;
+    this.#stateFor = typeof stateFor === 'function' ? stateFor : null;
     this.#diagnostics = diagnostics ?? createWeixinDiagnostics({ logger });
   }
 
@@ -287,6 +292,26 @@ export class WeixinController {
       }
       return runtime.sendProactiveText(target, text, options);
     });
+  }
+
+  /** Queued proactive messages of one account, oldest first. */
+  async proactiveOutbox(botId) {
+    const config = this.#configStore.get(botId);
+    if (!config) throw new Error('Unknown Weixin account');
+    const runtime = this.#runtimes.get(botId);
+    if (typeof runtime?.proactiveOutbox === 'function') return runtime.proactiveOutbox();
+    const state = this.#stateFor ? await this.#stateFor(botId).catch(() => null) : null;
+    return state?.listOutbox?.() ?? [];
+  }
+
+  /** Drop queued proactive messages: one by id, all of one recipient, or all. */
+  async clearProactiveOutbox(botId, { id, toUserId } = {}) {
+    const config = this.#configStore.get(botId);
+    if (!config) throw new Error('Unknown Weixin account');
+    const runtime = this.#runtimes.get(botId);
+    if (typeof runtime?.clearProactiveOutbox === 'function') return runtime.clearProactiveOutbox({ id, toUserId });
+    const state = this.#stateFor ? await this.#stateFor(botId).catch(() => null) : null;
+    return state?.removeOutbox?.({ id, toUserId }) ?? 0;
   }
 
   async presentSessionSyncApproval(botId, target, interaction, options = {}) {

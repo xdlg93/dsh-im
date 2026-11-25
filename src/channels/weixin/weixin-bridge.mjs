@@ -326,6 +326,8 @@ export class WeixinHarnessBridge {
   #replyTimeoutMs;
   #maxMessageChars;
   #typingKeepaliveMs;
+  /** Called with the sender id once an inbound message has reopened the session. */
+  #onInboundMessage;
   #signal;
   #queues = new Map();
   #busyMessages = new BusyMessageDispatcher();
@@ -361,6 +363,7 @@ export class WeixinHarnessBridge {
     maxMessageChars = DEFAULT_WEIXIN_MAX_MESSAGE_CHARS,
     typingKeepaliveMs = DEFAULT_TYPING_KEEPALIVE_MS,
     signal,
+    onInboundMessage = undefined,
   }) {
     if (!api || typeof api.sendText !== 'function') throw new TypeError('Weixin API is required');
     if (!baseUrl || !token || !ownerUserId) throw new TypeError('Weixin account credentials are required');
@@ -382,6 +385,7 @@ export class WeixinHarnessBridge {
     this.#maxMessageChars = maxMessageChars;
     this.#typingKeepaliveMs = typingKeepaliveMs;
     this.#signal = signal;
+    this.#onInboundMessage = typeof onInboundMessage === 'function' ? onInboundMessage : undefined;
     this.#deferred = createDeferredDeliveryCoordinator({ harness, state, signal, logger,
       deliver: (entry, outcome) => this.#deliverDeferredOutcome(entry, outcome),
     });
@@ -440,6 +444,14 @@ export class WeixinHarnessBridge {
       contextToken,
       seq: message.seq,
       messageTimeMs: message.create_time_ms ?? weixinMessageTimestampMs(messageId),
+    }).then(() => {
+      // The session is open again: let the runtime deliver anything it queued
+      // while the platform was refusing sends.
+      try {
+        this.#onInboundMessage?.(sender);
+      } catch (error) {
+        this.#logger.warn?.('[dsh-weixin] inbound hook failed:', error);
+      }
     }).catch((error) => this.#logger.warn?.('[dsh-weixin] failed to persist conversation context:', error));
     const runId = nonEmptyString(message?.run_id) ?? undefined;
     const pending = this.#pendingInteractions.get(key);

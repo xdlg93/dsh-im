@@ -178,6 +178,10 @@ QQ 会自动保存实际收到的群消息与附件，包括平台允许接收�
 
 主动推送让外部应用在没有用户新消息时，通过已接入的机器人发送文字：调用方只需保存稳定的 `botId + targetId`，不必保存 `sessionId`、聊天引用或临时 Webhook。设置页支持从已聊会话选择目标、保存前测试路由、复制调用参数，并提供 HTTP POST、同 Host 插件 `ctx.dshIm.send()` 与 Connection RPC 三种调用方式。
 
+助手也可以直接调用 `dsh_im_targets`（列出已配置目标）与 `dsh_im_send`（向 `botId + targetId` 推送文字）主动发消息，不需要外部脚本。
+
+微信有一条平台限制：iLink 只在会话有效期内接受发送，过期后返回 `errcode -14`。这类消息不会丢，会进入账号状态里的持久化队列，等对方下次给机器人发消息时按顺序自动送达；调用方会收到 `queued: true` 而不是 `sent: true`。
+
 完整字段、示例、管理端点、错误码与排错说明见 [主动投递使用指南](PROACTIVE_DELIVERY.md)（[English](PROACTIVE_DELIVERY.en.md)）。
 
 ### 会话同步

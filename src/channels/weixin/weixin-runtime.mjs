@@ -111,6 +111,8 @@ export function createWeixinRuntimeStatus() {
   };
 }
 
+const SESSION_TIMEOUT_PROVIDER_CODE = '-14';
+
 export class WeixinRuntime {
   #api;
   #config;
@@ -207,6 +209,9 @@ export class WeixinRuntime {
         replyTimeoutMs: this.#replyTimeoutMs,
         maxMessageChars: this.#maxMessageChars,
         signal,
+        // A fresh inbound message reopens the conversation session, which is the
+        // only moment a queued proactive message can be delivered.
+        onInboundMessage: (sender) => { void this.flushOutbox(sender); },
       });
       this.#status.ready = true;
       this.#status.weixinConnectionState = 'connected';
@@ -403,7 +408,15 @@ export class WeixinRuntime {
     }, options);
   }
 
-  async sendProactiveText(target, text, { signal, format = 'plain' } = {}) {
+  /**
+   * Send text without waiting for an inbound message.
+   *
+   * iLink refuses a send once the conversation session has expired
+   * (`errcode -14`), and no client-side retry can reopen it: only the recipient
+   * writing to the bot does. Instead of losing the message, the remaining text is
+   * queued durably and delivered by flushOutbox() on the next inbound message.
+   */
+  async sendProactiveText(target, text, { signal, format = 'plain', queueOnSessionTimeout = true } = {}) {
     const toUserId = typeof target?.route?.toUserId === 'string'
       ? target.route.toUserId.trim() : '';
     if (target?.kind !== 'user' || !toUserId) {
@@ -423,11 +436,79 @@ export class WeixinRuntime {
       : splitWeixinText(text, this.#maxMessageChars);
     for (const [chunkIndex, chunk] of chunks.entries()) {
       sendSignal.throwIfAborted();
-      await this.#sendTrackedText({
-        toUserId, text: chunk, signal: sendSignal,
-        fullText: text, chunkIndex, chunkCount: chunks.length,
-      });
+      try {
+        await this.#sendTrackedText({
+          toUserId, text: chunk, signal: sendSignal,
+          fullText: text, chunkIndex, chunkCount: chunks.length,
+        });
+      } catch (error) {
+        const remaining = chunks.slice(chunkIndex).join('');
+        if (!queueOnSessionTimeout || error?.providerCode !== SESSION_TIMEOUT_PROVIDER_CODE) throw error;
+        const queued = await this.#queueProactive({ toUserId, text: remaining, format, reason: error?.providerCode });
+        return {
+          sent: false,
+          queued: true,
+          reason: 'session-timeout',
+          pending: queued.pending,
+          deliveredChunks: chunkIndex,
+        };
+      }
     }
     return { sent: true };
+  }
+
+  /** Queued proactive messages of one recipient, or all of them. */
+  proactiveOutbox(toUserId = undefined) {
+    return this.#state.listOutbox?.(toUserId) ?? [];
+  }
+
+  async clearProactiveOutbox({ id, toUserId } = {}) {
+    return this.#state.removeOutbox?.({ id, toUserId }) ?? 0;
+  }
+
+  async #queueProactive({ toUserId, text, format, reason }) {
+    if (typeof this.#state.enqueueOutbox !== 'function') {
+      const error = new Error('Weixin state store cannot queue proactive messages');
+      error.code = 'outbox-unavailable';
+      throw error;
+    }
+    const entry = await this.#state.enqueueOutbox({ toUserId, text, format, reason });
+    this.#status.proactiveQueue = { pending: entry.pending, queuedAt: entry.createdAt };
+    this.#logger.warn?.(`[dsh-weixin] proactive message queued for ${toUserId}: session expired (${reason ?? 'unknown'}), ${entry.pending} pending`);
+    return entry;
+  }
+
+  /**
+   * Deliver queued proactive messages for one recipient, oldest first. Runs on
+   * every inbound message; stops at the first refusal so the order is preserved
+   * and nothing is dropped.
+   */
+  async flushOutbox(toUserId) {
+    if (typeof this.#state.listOutbox !== 'function' || typeof this.#state.removeOutbox !== 'function') return 0;
+    const recipient = typeof toUserId === 'string' ? toUserId.trim() : '';
+    if (!recipient || !this.#status.ready || !this.#abortController) return 0;
+    const entries = this.#state.listOutbox(recipient);
+    let delivered = 0;
+    for (const entry of entries) {
+      if (this.#abortController.signal.aborted) break;
+      try {
+        await this.sendProactiveText(
+          { kind: 'user', route: { toUserId: recipient } },
+          entry.text,
+          { format: entry.format, queueOnSessionTimeout: false },
+        );
+      } catch (error) {
+        this.#logger.warn?.(`[dsh-weixin] queued message ${entry.id} still undeliverable: ${error?.message ?? error}`);
+        break;
+      }
+      await this.#state.removeOutbox({ id: entry.id });
+      delivered += 1;
+    }
+    if (delivered > 0) {
+      const pending = this.#state.listOutbox(recipient).length;
+      this.#status.proactiveQueue = { pending, queuedAt: null };
+      this.#logger.info?.(`[dsh-weixin] delivered ${delivered} queued proactive message(s) to ${recipient}, ${pending} left`);
+    }
+    return delivered;
   }
 }

@@ -384,6 +384,8 @@ const EN = Object.freeze({
   'dsh-im 1.0.0 起支持 DSH 0.2.2-rc.5 及以上（0.2.x 全系列）。': 'dsh-im 1.0.0 supports DSH 0.2.2-rc.5 and newer (every 0.2.x release).',
   '已在 DSH 0.2.3-alpha.2 上修复 Cordis 4.2 的根上下文兼容问题。': 'Fixed the Cordis 4.2 root-context incompatibility on DSH 0.2.3-alpha.2.',
   '未发布到 npm 时不会自动更新，请按原安装方式用 git 重新安装。': 'Automatic updates need npm; reinstall from git with the original install method instead.',
+  '微信只允许在会话有效期内直接发送；会话超时的消息会排队，等对方下次给机器人发消息时自动送达。': 'WeChat only accepts a direct send while the conversation session is open; a message pushed after it expires is queued and delivered when the recipient writes to the bot again.',
+  '会话已超时，测试消息已排队；对方下次给机器人发消息时会自动送达。': 'The session had expired, so the test message is queued and will be delivered when the recipient writes to the bot.',
   '填入示例': 'Use example',
   '清空': 'Clear',
   '选择在哪些会话中启用、提供哪些来源字段，以及如何使用这些信息。仅使用已有消息元数据，不查询平台 API。': 'Choose which conversations to enhance, which source fields to include, and how to use them. Only existing message metadata is used; no platform APIs are queried.',

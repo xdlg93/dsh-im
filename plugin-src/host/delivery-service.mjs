@@ -728,7 +728,13 @@ export class DeliveryService {
       const result = await adapter.sendText(id, target, text, { signal, expectedFingerprint, beforeSend,
         ...(receipt ? { receipt: true } : {}),
         ...(format === 'markdown' ? { format } : {}) });
-      if (!receipt) return { sent: true };
+      if (!receipt) {
+        // A channel that holds the message until the conversation reopens reports
+        // it here; callers must not be told the message was delivered.
+        return result?.queued === true
+          ? { sent: false, queued: true, reason: result.reason ?? null, pending: result.pending ?? null }
+          : { sent: true };
+      }
       if (result?.sent !== true || result.receipt?.version !== 1
         || typeof result.receipt.messageId !== 'string' || !result.receipt.messageId || result.receipt.messageId.length > 512
         || result.receipt.conversationId !== target.route.chatId)
@@ -762,11 +768,13 @@ export class DeliveryService {
         if (!target) throw deliveryError('unknown-target', 'Unknown target');
       }
       cancellation(signal);
-      await adapter.sendText(id, target, text, {
+      const result = await adapter.sendText(id, target, text, {
         signal,
         ...(format === 'markdown' ? { format } : {}),
       });
-      return { sent: true };
+      return result?.queued === true
+        ? { sent: false, queued: true, reason: result.reason ?? null, pending: result.pending ?? null }
+        : { sent: true };
     } catch (error) {
       if (signal?.aborted || error?.name === 'AbortError' || error?.code === 'ABORT_ERR') {
         throw deliveryError('cancelled', 'Request cancelled', { cause: error });

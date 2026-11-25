@@ -180,6 +180,10 @@ With no running task, messages start a new task as usual; images, files, and quo
 
 Proactive delivery lets an external app send text through a connected bot without a fresh user message. The caller only stores a stable `botId + targetId` — no `sessionId`, chat reference, or temporary webhook. The settings page can pick a target from past conversations, test the route before saving, and copy the call parameters, and the same target configuration serves HTTP POST, the same-Host `ctx.dshIm.send()` service, and Connection RPC.
 
+The assistant can also push directly: `dsh_im_targets` lists the configured targets and `dsh_im_send` delivers text to one `botId + targetId`, with no external script.
+
+WeChat has one platform limit worth knowing: iLink only accepts a send while the conversation session is open, and answers `errcode -14` once it expires. Such a message is not lost — it is queued in the account state and delivered in order when the recipient writes to the bot again, and the caller receives `queued: true` instead of `sent: true`.
+
 Fields, examples, management endpoints, error codes, and troubleshooting are in the [proactive delivery guide](PROACTIVE_DELIVERY.en.md) ([简体中文](PROACTIVE_DELIVERY.md)).
 
 ### Session sync

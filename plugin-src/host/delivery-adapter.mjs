@@ -467,6 +467,11 @@ export function createDeliveryAdapter({
         throw new TypeError('delivery controller cannot send proactive text');
       }
       const result = await coreController.sendProactiveText(botId, normalized, text, options);
+      // A channel may accept the message without delivering it now (WeChat queues
+      // it until the conversation session reopens); keep that visible to callers.
+      if (result?.queued === true) {
+        return { sent: false, queued: true, reason: result.reason ?? null, pending: result.pending ?? null };
+      }
       return options.receipt === true ? result : { sent: true };
     },
     async setSessionSync(botId, targetId, enabled) {
@@ -543,6 +548,11 @@ export function createDeliveryAdapter({
         throw new TypeError('delivery controller cannot send proactive text');
       }
       const result = await coreController.sendProactiveText(botId, target, text, options);
+      // A queued message is not a failure: the channel holds it until the
+      // conversation reopens. Report the queue instead of raising.
+      if (result?.queued === true) {
+        return { sent: false, queued: true, reason: result.reason ?? null, pending: result.pending ?? null };
+      }
       // Rich senders may report failure without throwing. Never report these
       // as success, or retry an uncertain send that may already be visible.
       if (result === false || result?.sent === false

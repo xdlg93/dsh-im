@@ -2,6 +2,7 @@ import { installGroupHistoryTools } from '../../src/channels/shared/group-histor
 import { apply as applyQq } from './channels/qq/index.mjs';
 import { apply as applyWeixin } from './channels/weixin/index.mjs';
 import { installOutboundArtifactTool } from '../../src/channels/shared/semantic/artifact.mjs';
+import { installProactiveSendTools } from './channels/shared/proactive-send-tool.mjs';
 import { installHostLanguage } from './host-language.mjs';
 import { installHostLanguageRpc } from './host-language-rpc.mjs';
 import { installDeliveryRpc } from './delivery-rpc.mjs';
@@ -165,10 +166,14 @@ export function createImHostPlugin(internals = {}) {
       ctx.inject(['tools', 'systemPrompt'], (artifactCtx) => {
         installOutboundArtifactTool(artifactCtx);
         installGroupHistoryTools(artifactCtx);
+        // Proactive push needs the delivery service built above, so it is
+        // registered here rather than at plugin construction.
+        installProactiveSendTools(artifactCtx, { deliveryService });
       });
     } else {
       installOutboundArtifactTool(ctx);
       installGroupHistoryTools(ctx);
+      installProactiveSendTools(ctx, { deliveryService });
     }
     const logger = typeof ctx?.logger === 'function'
       ? ctx.logger(name)

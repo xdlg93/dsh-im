@@ -208,5 +208,10 @@ await createImHostPlugin().apply({
 if (typeof deliveryApi?.createTarget !== 'function') {
   throw new Error('host bundle must expose dshIm.createTarget; rebuild before publishing');
 }
+// The proactive push tools are mounted only once a Host activates the channels,
+// which this stub never does; assert that both definitions made it into the bundle.
+for (const tool of ['dsh_im_targets', 'dsh_im_send']) {
+  if (!host.includes(tool)) throw new Error(`host bundle must ship the ${tool} agent tool`);
+}
 
 console.log('Verified dsh-im package artifacts.');

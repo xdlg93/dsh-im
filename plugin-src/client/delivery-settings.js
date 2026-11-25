@@ -34,6 +34,9 @@ export const BOT_SETTINGS_TABS = Object.freeze([
 const CHANNEL_DEFINITIONS = Object.freeze({
   weixin: {
     label: '微信',
+    // iLink only accepts a send while the conversation session is open; a
+    // message pushed later is queued and delivered when the recipient writes.
+    note: '微信只允许在会话有效期内直接发送；会话超时的消息会排队，等对方下次给机器人发消息时自动送达。',
     kinds: [{ value: 'user', label: '用户' }],
     fields: { user: [{ key: 'toUserId', label: '微信用户 ID', placeholder: '填写接收消息的用户 ID' }] },
   },
@@ -424,8 +427,10 @@ function TargetRow({ definition, target, botId, connected, rpcCall, onChanged, o
     setAction('test');
     setTestState(null);
     try {
-      await rpcCall(DELIVERY_ENDPOINTS.test, { botId, targetId: target.targetId });
-      setTestState({ tone: 'success', message: '测试消息已发送，请到目标会话确认。' });
+      const result = await rpcCall(DELIVERY_ENDPOINTS.test, { botId, targetId: target.targetId });
+      setTestState(result?.queued === true
+        ? { tone: 'success', message: '会话已超时，测试消息已排队；对方下次给机器人发消息时会自动送达。' }
+        : { tone: 'success', message: '测试消息已发送，请到目标会话确认。' });
     } catch (error) {
       setTestState({ tone: 'error', message: presentError(error, '测试发送失败，请稍后重试。') });
     } finally {
@@ -728,6 +733,7 @@ export function DeliveryTargetSettingsPage({
     h('div', { className: 'dim-deliverySectionHeading' },
       h('div', null,
         h('h3', { id: 'dim-delivery-targets-title' }, '投递目标'),
+        definition.note ? h('p', { className: 'dim-deliveryChannelNote' }, definition.note) : null,
         account.connected
           ? null
           : h('p', null, '机器人当前离线；仍可配置目标，恢复连接后再测试。')),

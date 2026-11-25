@@ -9,6 +9,7 @@ import {
   WeixinConfigStore,
 } from '../../../src/channels/weixin/config-store.mjs';
 import {
+  WEIXIN_OUTBOX_TTL_MS,
   WEIXIN_RECENT_OUTBOUND_LIMIT,
   WEIXIN_RECENT_OUTBOUND_TTL_MS,
   WeixinStateStore,
@@ -219,4 +220,46 @@ test('state store matches a recent bot reply from the timestamp encoded in msg_i
   assert.equal(state.recentOutboundTextFor({
     toUserId: 'owner-user', messageId, now,
   }), '由真实微信消息 ID 恢复');
+});
+
+test('a proactive message refused by the platform is queued durably and survives restart', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-outbox-'));
+  const path = join(root, 'state.json');
+  const state = await new WeixinStateStore(path).load();
+  const first = await state.enqueueOutbox({ toUserId: 'alice', text: 'first', reason: '-14' });
+  await state.enqueueOutbox({ toUserId: 'alice', text: 'second' });
+  await state.enqueueOutbox({ toUserId: 'bob', text: 'third' });
+  assert.equal(first.pending, 1);
+
+  const restored = await new WeixinStateStore(path).load();
+  assert.deepEqual(restored.listOutbox('alice').map((entry) => entry.text), ['first', 'second']);
+  assert.deepEqual(restored.listOutbox().map((entry) => entry.text), ['first', 'second', 'third']);
+  assert.equal(restored.listOutbox('alice')[0].lastError, '-14');
+  await assertRestrictiveMode(path, 0o600);
+
+  assert.equal(await restored.removeOutbox({ id: first.id }), 1);
+  assert.deepEqual(restored.listOutbox('alice').map((entry) => entry.text), ['second']);
+  assert.equal(await restored.removeOutbox({ toUserId: 'alice' }), 1);
+  assert.deepEqual(restored.listOutbox('alice'), []);
+  assert.equal(await restored.removeOutbox({}), 1);
+  assert.deepEqual(restored.listOutbox(), []);
+});
+
+test('the proactive outbox drops entries older than its lifetime and keeps the newest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-outbox-limits-'));
+  const path = join(root, 'state.json');
+  const stale = Date.now() - WEIXIN_OUTBOX_TTL_MS - 1_000;
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    sessions: {},
+    seenMessageIds: [],
+    getUpdatesBuf: '',
+    recentOutboundMessages: [],
+    outbox: [
+      { id: 'stale', toUserId: 'alice', text: 'too old', createdAt: stale },
+      { id: 'fresh', toUserId: 'alice', text: 'still valid', createdAt: Date.now() },
+    ],
+  }));
+  const state = await new WeixinStateStore(path).load();
+  assert.deepEqual(state.listOutbox().map((entry) => entry.id), ['fresh']);
 });
