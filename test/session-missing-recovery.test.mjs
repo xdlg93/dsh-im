@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { WecomHarnessClient } from '../src/channels/wecom/harness-client.mjs';
+import { HarnessClient as WeixinHarnessClient } from '../src/channels/weixin/harness-client.mjs';
 import { HarnessRpcError } from '../src/channels/shared/harness-client.mjs';
 import { askInWorkspaceSession } from '../src/channels/shared/workspace-session.mjs';
 
@@ -42,7 +42,7 @@ for (const code of ['session-not-found', 'session/not-found']) {
         const namespace = domain === 'session' ? 'sessions' : domain;
         (apiProxy[namespace] ??= {})[action] = request => handle(method, request);
       }
-      const harness = new WecomHarnessClient({ workspace: '/workspace',
+      const harness = new WeixinHarnessClient({ workspace: '/workspace',
         ...(transport === 'host-api' ? { apiProxy } : {
           baseUrl: 'http://127.0.0.1:3080',
           fetchImpl: async (_url, options) => {
@@ -74,7 +74,7 @@ for (const code of ['session-not-found', 'session/not-found']) {
 
 test('an unreadable or inaccessible Session does not silently replace its binding', async () => {
   for (const code of ['internal', 'gateway/internal', 'session/forbidden']) {
-    const harness = new WecomHarnessClient({ apiProxy: {}, workspace: '/workspace' });
+    const harness = new WeixinHarnessClient({ apiProxy: {}, workspace: '/workspace' });
     harness.rpc = async method => {
       if (method === 'workspace.list') return { archivedSessionIds: [] };
       assert.equal(method, 'session.history');

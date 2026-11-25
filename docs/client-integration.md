@@ -8,7 +8,7 @@ The optional `dshImClient` service exposes the existing IM management panel to a
 
 On DSH versions with plugin detail actions, **Open IM bots** opens the same management panel in the main area. The panel has no back button; use the host sidebar to switch panels. This entry uses the optional `layout` service and the `plugins.detail.actions` slot. Older DSH versions retain the Settings entry.
 
-「IM机器人」页面右上角的「会话记录」按钮与「通用设置」并列，打开各 IM 通道已绑定会话的只读列表；点击 Session ID 可查看用户与助手正文、刷新或加载更早消息。列表和正文页均提供「返回 IM机器人」。会话记录不注册独立侧边栏入口；只有宿主提供导航服务与主面板槽位时才显示按钮。目录覆盖标准机器人状态路径、微信账号状态和已配置的飞书旧版状态，不推断自定义 `dataDir` / `botsDir`。
+「IM机器人」页面右上角的「会话记录」按钮与「通用设置」并列，打开各 IM 通道已绑定会话的只读列表；点击 Session ID 可查看用户与助手正文、刷新或加载更早消息。列表和正文页均提供「返回 IM机器人」。会话记录不注册独立侧边栏入口；只有宿主提供导航服务与主面板槽位时才显示按钮。目录覆盖微信账号状态与 QQ 机器人状态的标准路径，不推断自定义 `dataDir` / `botsDir`。
 
 **Session history**, next to **General settings** in the IM bots toolbar, opens a read-only list of bound IM sessions. Select a Session ID to read user and assistant text, refresh, or load earlier messages. Both the list and transcript provide **Back to IM bots**. History has no separate sidebar entry, and the toolbar action appears only when the host provides navigation and a main-panel slot. Discovery covers standard bot state, Weixin accounts, and configured Feishu legacy state; custom `dataDir` / `botsDir` overrides are not inferred.
 

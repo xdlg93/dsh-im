@@ -8,24 +8,10 @@ import { normalizeLastMessageError } from '../plugin-src/client/last-message-err
 import { classifyMessageFailure, publicMessageFailure } from '../src/channels/shared/message-failure.mjs';
 import { LastMessageErrorSummary } from '../plugin-src/client/channel-card-meta.js';
 import { formatConnectionDiagnostic } from '../plugin-src/client/connection-error.js';
-import { normalizeBotsSnapshot as normalizeFeishu } from '../plugin-src/client/channels/feishu/api.js';
-import { normalizeSnapshot as normalizeDingtalk } from '../plugin-src/client/channels/dingtalk/api.js';
 import { normalizeSnapshot as normalizeWeixin } from '../plugin-src/client/channels/weixin/api.js';
-import { normalizeSnapshot as normalizeWecom } from '../plugin-src/client/channels/wecom/api.js';
 import { normalizeSnapshot as normalizeQq } from '../plugin-src/client/channels/qq/api.js';
-import { normalizeSnapshot as normalizeSlack } from '../plugin-src/client/channels/slack/api.js';
-import { normalizeSnapshot as normalizeTelegram } from '../plugin-src/client/channels/telegram/api.js';
-import { normalizeSnapshot as normalizeDiscord } from '../plugin-src/client/channels/discord/api.js';
-import { normalizeSnapshot as normalizeWhatsapp } from '../plugin-src/client/channels/whatsapp/api.js';
-import { BotCard as FeishuBotCard } from '../plugin-src/client/channels/feishu/index.js';
-import { AccountCard as DingtalkAccountCard } from '../plugin-src/client/channels/dingtalk/index.js';
 import { AccountCard as WeixinAccountCard } from '../plugin-src/client/channels/weixin/index.js';
-import { AccountCard as WecomAccountCard } from '../plugin-src/client/channels/wecom/index.js';
 import { AccountCard as QqAccountCard } from '../plugin-src/client/channels/qq/index.js';
-import { SlackAccountCard } from '../plugin-src/client/channels/slack/index.js';
-import { TelegramAccountCard } from '../plugin-src/client/channels/telegram/index.js';
-import { DiscordAccountCard } from '../plugin-src/client/channels/discord/index.js';
-import { WhatsappAccountCard } from '../plugin-src/client/channels/whatsapp/index.js';
 
 const publicFailure = Object.freeze({
   code: 'MODEL_RATE_LIMIT',
@@ -133,15 +119,8 @@ test('last-message error normalizer keeps only the bounded public contract', () 
 
 test('all channel snapshot normalizers retain the same safe message failure', () => {
   const normalizers = [
-    ['Feishu', normalizeFeishu],
-    ['DingTalk', normalizeDingtalk],
     ['WeChat', normalizeWeixin],
-    ['WeCom', normalizeWecom],
     ['QQ', normalizeQq],
-    ['Slack', normalizeSlack],
-    ['Telegram', normalizeTelegram],
-    ['Discord', normalizeDiscord],
-    ['WhatsApp', normalizeWhatsapp],
   ];
 
   for (const [channel, normalize] of normalizers) {
@@ -165,15 +144,8 @@ test('all channel cards show message failures independently from healthy connect
     onCancelRemove() {},
   };
   const cards = [
-    ['Feishu', FeishuBotCard, { connection: account }],
-    ['DingTalk', DingtalkAccountCard, { account }],
     ['WeChat', WeixinAccountCard, { account }],
-    ['WeCom', WecomAccountCard, { account }],
     ['QQ', QqAccountCard, { account }],
-    ['Slack', SlackAccountCard, { account }],
-    ['Telegram', TelegramAccountCard, { account }],
-    ['Discord', DiscordAccountCard, { account }],
-    ['WhatsApp', WhatsappAccountCard, { account }],
   ];
 
   for (const [channel, Card, props] of cards) {

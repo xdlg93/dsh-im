@@ -6,29 +6,11 @@ import { join } from 'node:path';
 
 import { ConversationStateStore } from '../src/channels/shared/conversation-state-store.mjs';
 import { QqStateStore } from '../src/channels/qq/state-store.mjs';
-import { TelegramHarnessBridge } from '../src/channels/telegram/telegram-bridge.mjs';
 import { QqHarnessBridge } from '../src/channels/qq/qq-bridge.mjs';
 
 const logger = { info() {}, warn() {}, error() {} };
 
 const channels = {
-  telegram: {
-    Store: ConversationStateStore,
-    create: ({ harness, state, send }) => new TelegramHarnessBridge({
-      harness, state, logger,
-      bot: {
-        sendText: async (target, text) => {
-          send(target, text);
-          return { messageId: 'out' };
-        },
-      },
-    }),
-    message: (id, text) => ({
-      messageId: id, content: text, senderId: 'owner', senderIsBot: false,
-      kind: 'direct', conversationId: 'chat', addressed: true, plainText: true,
-      replyTarget: { chatId: 'chat' },
-    }),
-  },
   qq: {
     Store: QqStateStore,
     create: ({ harness, state, send }) => new QqHarnessBridge({

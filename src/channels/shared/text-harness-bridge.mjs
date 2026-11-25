@@ -100,7 +100,7 @@ const FILE_ONLY_COMPLETION_TEXT = '任务已完成。';
  * How many times one inbound message may be re-delivered after a failed turn.
  *
  * A failure releases the message's `markSeen` so the next poll retries it, which
- * would otherwise loop forever on a mail that always fails. After this many
+ * would otherwise loop forever on a message that always fails. After this many
  * attempts the mark stays and the message is treated as handled.
  */
 const MAX_DELIVERY_ATTEMPTS = 3;
@@ -119,7 +119,7 @@ function canClaimInteractionReply(message, pending, senderId) {
     && Boolean(controlTextOf(message));
 }
 
-function artifactFailureText(fileName, error, descriptor) {
+function artifactFailureText(fileName, error) {
   const name = String(fileName ?? t('结果文件'))
     .replace(/[\r\n]+/g, ' ')
     .trim()
@@ -128,18 +128,6 @@ function artifactFailureText(fileName, error, descriptor) {
     case 'artifact-delivery-uncertain':
       return t('结果文件「{name}」的发送结果未能确认，请先检查聊天内是否已收到，不要立即重试。', { name });
     case 'artifact-permission-required':
-      if (descriptor?.key === 'slack') {
-        return t('结果文件「{name}」已生成，但 Slack 应用缺少 files:write 权限。请更新 Manifest、重新安装应用并重新连接机器人后重试。', { name });
-      }
-      if (descriptor?.key === 'discord') {
-        return t('结果文件「{name}」已生成，但机器人缺少 Discord 的 Send Messages、Attach Files 或 Read Message History 权限。', { name });
-      }
-      if (descriptor?.key === 'telegram') {
-        return t('结果文件「{name}」已生成，但 Telegram 不允许机器人在当前聊天发送文档，请检查聊天权限。', { name });
-      }
-      if (descriptor?.key === 'matrix') {
-        return t('结果文件「{name}」已生成，但 Matrix homeserver 拒绝了媒体上传，请检查其媒体大小限制与上传权限。', { name });
-      }
       return t('结果文件「{name}」已生成，但当前机器人没有文件发送权限，请检查渠道权限。', { name });
     case 'artifact-too-large':
       return t('结果文件「{name}」超过当前渠道大小上限，未发送。', { name });
@@ -177,10 +165,9 @@ export function createTextBridgeStatus() {
 /**
  * The text a channel's control commands and approval decisions are parsed from.
  *
- * A channel may decorate `content` for the model — the email channel prepends
- * the mail headers so a subject line reaches the model — while `controlText`
- * keeps the undecorated body. Without this a decorated message made `/help`
- * and "批准" unrecognisable.
+ * A channel may decorate `content` for the model by prepending its own header
+ * lines, while `controlText` keeps the undecorated body. Without this a
+ * decorated message made `/help` and "批准" unrecognisable.
  */
 function controlTextOf(message) {
   return cleanText(message?.controlText ?? message?.content);
@@ -238,7 +225,7 @@ export class TextHarnessBridge {
   #contextHooks = null;
   // Delivery attempts per message id. A failed turn releases its `markSeen` so
   // the next poll can retry, and this counter is what keeps that from becoming
-  // an infinite loop on a mail that always fails.
+  // an infinite loop on a message that always fails.
   #deliveryAttempts = new Map();
   // Who opened the in-flight turn per conversation key, for the same-sender
   // auto-steer lane; and the open coalescing windows awaiting their flush.
@@ -352,7 +339,7 @@ export class TextHarnessBridge {
         conversationType: kind,
         senderIds: [senderId, cleanText(normalized.senderAlternateId)].filter(Boolean),
         // The same control text the command runner below parses. A channel may
-        // decorate `content` for the model (email prepends the mail headers), and
+        // decorate `content` for the model with its own header lines, and
         // a decorated body never looks like a command — so reading `content` here
         // recognized no command at all and skipped the command-permission gate.
         text: controlTextOf(normalized),
@@ -528,7 +515,7 @@ export class TextHarnessBridge {
       actor: senderId,
       messageId,
       // Approval decisions are parsed from the control text, exactly like the
-      // commands above: a decorated `content` hid "批准" behind the mail headers,
+      // commands above: a decorated `content` hid "批准" behind channel-added headers,
       // so a plain-body approval never claimed its pending request.
       text: hasInboundImages(normalized) || hasInboundFiles(normalized)
         ? ''
@@ -1081,7 +1068,7 @@ export class TextHarnessBridge {
         ? (file) => this.#bot.sendFile(target, file)
         : undefined,
       onFailure: (artifact, error) => setLastMessageFailure(this.#status, error, {
-        userMessage: artifactFailureText(artifact?.fileName, error, this.#descriptor),
+        userMessage: artifactFailureText(artifact?.fileName, error),
         reason: error?.code,
       }),
       sendFailureNotice: (_artifact, _error, failure) => this.#bot.sendText(
@@ -1120,9 +1107,9 @@ export class TextHarnessBridge {
     // streams: finish() must receive { text, format } so a markdown answer
     // renders rich instead of falling back to plain text.
     let thinkingStream = false;
-    // A keepalive heartbeat keeps short-lived carriers (e.g. Telegram's
-    // private-chat Rich Draft) visible during long silent stretches such as a
-    // running tool call. Declared outside the try so every exit path (including
+    // A keepalive heartbeat keeps a short-lived carrier (e.g. a private-chat
+    // rich draft) visible during long silent stretches such as a running tool
+    // call. Declared outside the try so every exit path (including
     // pre-prompt failures like image parsing) clears the timer.
     let keepaliveTimer = null;
     const stopKeepalive = () => {
@@ -1293,8 +1280,8 @@ export class TextHarnessBridge {
         && typeof stream.sendToolTrace === 'function');
       // What the model sees. A message may carry two texts: `controlText`, the
       // plain body the parsers read, and `content`, the same body decorated for
-      // the model — the email channel prefixes the mail headers there, so a
-      // subject-only instruction is not silently dropped. Falling back to the
+      // the model — a channel may prepend its own header lines there, so a
+      // header-only instruction is not silently dropped. Falling back to the
       // parsed text kept commands working but lost that decoration entirely.
       let content = hasImages || hasReply
         ? await promptContentForInboundMessage(message, { signal: this.#signal, deferImages: true })
@@ -1375,7 +1362,7 @@ export class TextHarnessBridge {
       // the sender of a group turn without replaying any message text. Channels
       // that own a different state store simply skip it.
       // The sender id and bot flag are always kept. A display name is kept only
-      // when the channel already exposes it (Matrix speakerName) or context
+      // when the channel already exposes it (a speaker name) or context
       // enhancement read it above; a disabled enhancement never leaks names.
       try {
         await this.#state.rememberAuthor?.(conversationKey, {
@@ -1393,7 +1380,7 @@ export class TextHarnessBridge {
       await this.#markPendingSubmitted(conversationKey, messageId);
       const { sessionId, answer, artifacts = [] } = await askInWorkspaceSession({
         onNotice: (notice) => this.#bot.sendText(target, notice),
-        deferredDelivery: () => ({ coordinator: this.#deferred, target: this.#descriptor.key === 'whatsapp' ? { jid: target.jid, selfChat: target.selfChat } : target }),
+        deferredDelivery: () => ({ coordinator: this.#deferred, target }),
         harness: this.#harness,
         state: this.#state,
         key: conversationKey,
@@ -1678,7 +1665,7 @@ export class TextHarnessBridge {
    * so the next poll can pick the message up again.
    *
    * Bounded: a message is retried at most `MAX_DELIVERY_ATTEMPTS` times, after
-   * which the mark stays and the id becomes a tombstone. That keeps a mail that
+   * which the mark stays and the id becomes a tombstone. That keeps a message that
    * always fails from being re-executed forever, while a transient Harness
    * outage no longer drops it permanently.
    *
@@ -1999,8 +1986,8 @@ export class TextHarnessBridge {
     }
 
     pending.callbackClaimed = true;
-    // A press can beat the card's own send promise — Telegram delivers the update
-    // as soon as its API accepted the keyboard. Wait for delivery so the card id
+    // A press can beat the card's own send promise — the carrier delivers the
+    // update as soon as its API accepted the keyboard. Wait for delivery so the card id
     // exists and the shared submission path can retire its keyboard.
     await pending.presentationTask?.catch(() => undefined);
     await notice(t('已选择：{label}', { label: option.label }));

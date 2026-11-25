@@ -69,7 +69,7 @@ export function normalizeDeliverySyncSettings(value) {
 /**
  * Whether both delivery switches are off. This is the one predicate for
  * silencing a Session's targets: the coordinator's target path and a channel's
- * own mirror (the Feishu process card) both consult it, so "both off means this
+ * own mirror (a process card) both consult it, so "both off means this
  * chat receives nothing" holds for every path that follows a Session.
  *
  * A value that cannot be normalized counts as off, so a damaged document fails

@@ -483,23 +483,20 @@ test('/tail file export fences arbitrary Markdown bodies byte-for-byte', async (
 });
 
 
-test('capability matrix: buttons and file send are declared per channel', () => {
-  assert.deepEqual(channelCapabilities('telegram'), { buttons: true, fileSend: true });
-  assert.deepEqual(channelCapabilities('slack'), { buttons: false, fileSend: true });
-  assert.deepEqual(channelCapabilities('discord'), { buttons: false, fileSend: true });
-  assert.deepEqual(channelCapabilities('feishu'), { buttons: false, fileSend: false });
-  assert.deepEqual(channelCapabilities('dingtalk'), { buttons: false, fileSend: false });
-  assert.deepEqual(channelCapabilities('whatsapp'), { buttons: false, fileSend: false });
-  assert.deepEqual(channelCapabilities('matrix'), { buttons: false, fileSend: false });
+test('capability matrix: the surviving channels declare no buttons or file send', () => {
+  for (const channel of ['weixin', 'qq']) {
+    assert.deepEqual(channelCapabilities(channel), { buttons: false, fileSend: false }, channel);
+  }
+  assert.deepEqual(channelCapabilities('unknown'), { buttons: false, fileSend: false });
 });
 
 test('capability matrix: unsupported channels never send buttons or files', () => {
-  assert.equal(documentSendSupported('slack', { sendFile() {} }), true);
-  assert.equal(documentSendSupported('whatsapp', { sendFile() {} }), false, 'no file where unsupported');
-  assert.equal(documentSendSupported('telegram', {}), false, 'no file without a send method');
-  assert.equal(buttonPreviewSupported('telegram', { sendInteractionCard() {} }), true);
-  assert.equal(buttonPreviewSupported('telegram', {}), false, 'no button without a card method');
-  assert.equal(buttonPreviewSupported('discord', { sendInteractionCard() {} }), false, 'no button where unsupported');
+  for (const channel of ['weixin', 'qq']) {
+    assert.equal(documentSendSupported(channel, { sendFile() {} }), false, `${channel}: no file where unsupported`);
+    assert.equal(buttonPreviewSupported(channel, { sendInteractionCard() {} }), false, `${channel}: no button where unsupported`);
+  }
+  assert.equal(documentSendSupported('weixin', {}), false, 'no file without a send method');
+  assert.equal(buttonPreviewSupported('weixin', {}), false, 'no button without a card method');
 });
 
 test('runSessionNavTextCommand returns text and degrades a file export honestly', async () => {

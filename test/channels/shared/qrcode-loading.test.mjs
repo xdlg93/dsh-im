@@ -17,7 +17,9 @@ test('QR encoder survives repeated plugin and CommonJS dependency reloads', asyn
     const entry = require.resolve('qrcode');
     const server = require.resolve('qrcode/lib/server.js');
     const packageRoot = dirname(require.resolve('qrcode/package.json')) + sep;
-    const { PNG } = require('pngjs');
+    // pngjs is qrcode's renderer dependency; resolve it through qrcode so an
+    // isolated (pnpm) node_modules layout still finds the same copy.
+    const { PNG } = createRequire(require.resolve('qrcode/package.json'))('pngjs');
     let encodings = 0;
     async function encode() {
       const { default: QRCode } = await import(encoderUrl);

@@ -544,7 +544,7 @@ export class DeliveryService {
         const bindings = await adapter.listDsBotBindings?.() ?? [];
         const binding = bindings.find((entry) => entry.dsBotId === bot.id);
         if (!binding) continue;
-        const parsed = parseConversationKey(binding.conversationKey, { channel: adapter.channel });
+        const parsed = parseConversationKey(binding.conversationKey);
         return {
           channel: adapter.channel,
           botId: binding.botId,
@@ -595,10 +595,9 @@ export class DeliveryService {
     }
     const draft = deliverySuggestionFromConversationKey(described.channel, described.conversationKey);
     if (!draft) {
-      // A key the channel persisted but no route covers stays unroutable. An
-      // older shape such as `direct:<chatId>:<threadId>` is deliberately not
-      // reinterpreted as a chat: guessing a recipient would drop the thread and
-      // message the wrong place, so the key is only reported here.
+      // A key the channel persisted but no route covers stays unroutable: it is
+      // deliberately not reinterpreted as a chat, because guessing a recipient
+      // would message the wrong place. The key is only reported here.
       this.#warnUndelivered(sessionId, 'unroutable', described);
       return { sent: false, reason: 'unroutable' };
     }

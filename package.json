@@ -1,8 +1,8 @@
 {
-  "name": "@xmanrui/dsh-im",
-  "version": "5.10.0",
+  "name": "@xdlg93/dsh-im",
+  "version": "1.0.0",
   "icon": "./assets/logo-plugin-message-link-gradient.webp",
-  "description": "把微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix接入DSH。 Connect Telegram, WhatsApp, Slack, Discord, Matrix, WeChat, Feishu, WeCom, DingTalk, and QQ to DSH.",
+  "description": "把微信、QQ扫码接入DeepSeek Harness。 Connect WeChat and QQ to DSH via QR-code login.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -11,30 +11,22 @@
     "im",
     "instant-messaging",
     "chatbot",
-    "feishu",
-    "lark",
     "wechat",
-    "wecom",
-    "dingtalk",
+    "weixin",
     "qq",
-    "slack",
-    "telegram",
-    "discord",
-    "whatsapp",
-    "imessage",
-    "matrix",
+    "qr-login",
     "ai-office"
   ],
-  "author": "xmanrui (https://github.com/xmanrui)",
+  "author": "xdlg93",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xmanrui/dsh-im.git"
+    "url": "git+https://github.com/xdlg93/dsh-im.git"
   },
-  "homepage": "https://github.com/xmanrui/dsh-im#readme",
+  "homepage": "https://github.com/xdlg93/dsh-im#readme",
   "bugs": {
-    "url": "https://github.com/xmanrui/dsh-im/issues"
+    "url": "https://github.com/xdlg93/dsh-im/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -56,8 +48,6 @@
     "lib",
     "locale/*.json",
     "plugin-src",
-    "scripts/telegram-menu-scopes.mjs",
-    "scripts/verify-interface-language.mjs",
     "scripts/verify-injected-context.mjs",
     "scripts/verify-lan-management.mjs",
     "scripts/verify-model-setting.mjs",
@@ -91,9 +81,8 @@
     "compatibility": {
       "dsh": "0.2.2-rc.5",
       "dshReleases": {
-        "0.2.0-rc.2": "compatible",
-        "0.2.1-rc.2": "compatible",
-        "0.2.2-rc.5": "compatible"
+        "0.2.2-rc.5": "compatible",
+        "0.2.3-alpha.2": "compatible"
       },
       "profiles": [
         "web"
@@ -103,29 +92,22 @@
   "scripts": {
     "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
     "test": "node --test test/*.test.mjs test/channels/*/*.test.mjs",
-    "check": "npm run build && npm test && node scripts/verify-package.mjs"
+    "check": "npm run build && npm test && node scripts/verify-package.mjs",
+    "publish:index": "node scripts/publish-market-index.mjs"
   },
   "engines": {
-    "node": ">=22.19"
+    "node": ">=22.19",
+    "dsh": "^0.2.2-rc.5"
   },
   "dependencies": {
-    "@matrix-org/olm": "3.2.15",
     "@tencent-connect/qqbot-connector": "1.2.0",
     "@tencent-connect/qqbot-nodejs": "1.0.4",
-    "@wecom/aibot-node-sdk": "1.0.7",
-    "dingtalk-stream": "2.1.4",
-    "imapflow": "^2.0.5",
-    "mailparser": "^3.9.43",
-    "nodemailer": "^10.1.4",
     "qrcode": "1.5.4",
     "undici": "7.30.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
-    "@larksuiteoapi/node-sdk": "1.73.0",
-    "@whiskeysockets/baileys": "7.0.0-rc14",
     "esbuild": "0.25.9",
-    "https-proxy-agent": "5.0.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-test-renderer": "18.3.1",
@@ -137,7 +119,12 @@
     "test": "test"
   },
   "optionalDependencies": {
-    "@tencent-qqmail/agently-cli": "^1.0.18",
     "sharp": "0.35.5"
-  }
+  },
+  "contributors": [
+    {
+      "name": "xmanrui",
+      "url": "https://github.com/xmanrui"
+    }
+  ]
 }

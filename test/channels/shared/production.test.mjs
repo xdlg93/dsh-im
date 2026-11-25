@@ -47,7 +47,7 @@ test('token-channel production has no per-bot result-file Gate', async (t) => {
     Runtime,
     createConnectionSupervisor: () => supervisor,
   }, {
-    channel: 'test-token',
+    channel: 'qq',
     ConfigStore,
     StateStore,
     HarnessClient: Harness,

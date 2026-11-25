@@ -6,17 +6,7 @@ import { t } from './i18n.mjs';
 const reported = new WeakMap();
 const lastReport = new WeakMap();
 const stages = new WeakMap();
-const OWNED_REASONS = { 'harness-interaction-timeout': 'timeout', 'harness-response-invalid': 'invalid-response', 'connect-timeout': 'timeout', 'telegram-timeout': 'timeout', 'cli-timeout': 'timeout', 'provider-timeout': 'timeout', 'telegram-response-invalid': 'invalid-response', 'office-protocol-mismatch': 'invalid-response' };
-const KNOWN_MESSAGES = {
-  'discord-401': 'Discord Bot Token 无效，请重新填写。',
-  'discord-intents': 'Discord Gateway Intents 配置不正确，请检查 Developer Portal 的 Bot 设置。',
-  'webhook-configured': '该 Telegram 机器人已配置 Webhook，请先在原服务中移除 Webhook 后重试。',
-  'invalid-device-token': 'AI Office Device Token 无效。',
-  'office-hook-unavailable': 'AI Office Hook 尚未上线或地址不正确。',
-  'messages-database-permission-required': '请在 macOS 系统设置中授予 DSH 完全磁盘访问权限，以读取 Messages 数据库。',
-  'messages-automation-permission-required': '请在 macOS 系统设置中允许 DSH 自动控制 Messages。',
-  'messages-permission-required': '先在 macOS 系统设置中授予 Messages 权限。',
-};
+const OWNED_REASONS = { 'harness-interaction-timeout': 'timeout', 'harness-response-invalid': 'invalid-response', 'connect-timeout': 'timeout', 'cli-timeout': 'timeout', 'provider-timeout': 'timeout' };
 
 /** Inspect a bounded error graph, including SDK aggregate failures. Never copy exception text. */
 export function connectionErrorChain(error) {
@@ -143,7 +133,7 @@ export function operationStage(operation) {
     'connection.status': 'status.read', 'connection.close': 'connection.stop', 'provision.begin': 'qr.begin',
     'provision.poll': 'qr.poll', 'provision.verify': 'qr.verify', 'bot.auth.start': 'qr.begin', 'bot.auth.poll': 'qr.poll',
     'bot.reconnect': 'connection.start', 'bot.delete': 'account.remove', 'permissions.status': 'permission.check',
-    'bot.bind-credentials': 'credential.verify', 'bot.bind-mailbox': 'credential.verify', 'bot.bind-native': 'permission.check',
+    'bot.bind-credentials': 'credential.verify',
     'connection.test': 'connection.test', 'message.send': 'message.send', 'message.receive': 'message.receive',
   })[operation] ?? 'operation';
 }
@@ -159,13 +149,7 @@ export function createConnectionDiagnostics({ channel, logger = console, now = D
     const prior = evidence.chain.map(e => reported.get(e)).find(Boolean);
     if (prior) return prior;
     const described = describe?.(cause, context, evidence) ?? {};
-    const known = evidence.chain.find(e => Object.hasOwn(KNOWN_MESSAGES, e.code ?? ''));
-    let safe = described.publicError ?? context.publicError ?? {};
-    if (known && !safe.code?.startsWith('stream-')) safe = { ...safe, code: known.code, message: t(KNOWN_MESSAGES[known.code]) };
-    // These legacy handlers used exception messages as their public error. Keep only owned guidance.
-    if (['email', 'imessage', 'office'].includes(channel) && !known && context.untrustedPublicError) {
-      safe = { code: `${channel}-operation-failed`, message: t('操作失败，请查看原因和诊断详情。') };
-    }
+    const safe = described.publicError ?? context.publicError ?? {};
     const owned = evidence.chain.map(e => stages.get(e)).find(Boolean) ?? {};
     const details = normalizeDiagnosticDetails({
       ...evidence.details, ...context, ...safe.details, ...described.details, ...owned,

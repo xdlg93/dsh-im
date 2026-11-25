@@ -19,30 +19,16 @@ import {
   TokenBotConfigStore,
   deriveTokenBotIdentity,
 } from '../src/channels/shared/token-config-store.mjs';
-import { createWecomRpcHandler, WECOM_ENDPOINTS } from '../plugin-src/host/channels/wecom/rpc.mjs';
 import { createWeixinRpcHandler, WEIXIN_ENDPOINTS } from '../plugin-src/host/channels/weixin/rpc.mjs';
-import { createFeishuRpcHandler, FEISHU_ENDPOINTS } from '../plugin-src/host/channels/feishu/rpc.mjs';
-import { createDingtalkRpcHandler, DINGTALK_ENDPOINTS } from '../plugin-src/host/channels/dingtalk/rpc.mjs';
 import { createQqRpcHandler, QQ_ENDPOINTS } from '../plugin-src/host/channels/qq/rpc.mjs';
-import { createSlackRpcHandler, SLACK_ENDPOINTS } from '../plugin-src/host/channels/slack/rpc.mjs';
-import { createTelegramRpcHandler, TELEGRAM_ENDPOINTS } from '../plugin-src/host/channels/telegram/rpc.mjs';
-import { createDiscordRpcHandler, DISCORD_ENDPOINTS } from '../plugin-src/host/channels/discord/rpc.mjs';
-import { createWhatsappRpcHandler, WHATSAPP_ENDPOINTS } from '../plugin-src/host/channels/whatsapp/rpc.mjs';
 import {
   SET_CONTEXT_ENHANCEMENT_ENDPOINT,
   validContextEnhancementPayload,
 } from '../plugin-src/host/channels/shared/context-enhancement-rpc.mjs';
 
 const CHANNELS = [
-  ['wecom', createWecomRpcHandler, WECOM_ENDPOINTS],
   ['weixin', createWeixinRpcHandler, WEIXIN_ENDPOINTS],
-  ['feishu', createFeishuRpcHandler, FEISHU_ENDPOINTS],
-  ['dingtalk', createDingtalkRpcHandler, DINGTALK_ENDPOINTS],
   ['qq', createQqRpcHandler, QQ_ENDPOINTS],
-  ['slack', createSlackRpcHandler, SLACK_ENDPOINTS],
-  ['telegram', createTelegramRpcHandler, TELEGRAM_ENDPOINTS],
-  ['discord', createDiscordRpcHandler, DISCORD_ENDPOINTS],
-  ['whatsapp', createWhatsappRpcHandler, WHATSAPP_ENDPOINTS],
 ];
 
 const enabled = (overrides = {}) => {
@@ -481,9 +467,7 @@ test('shared context RPC payload validator rejects unknown keys and incomplete s
   ]) assert.equal(validContextEnhancementPayload(payload), false);
 });
 
-for (const [channel, createHandler, endpoints] of CHANNELS.filter(([name]) => (
-  !['slack', 'telegram', 'discord'].includes(name)
-))) {
+for (const [channel, createHandler, endpoints] of CHANNELS) {
   test(`${channel} QR/status projection failure happens before a context save commits`, async (t) => {
     const { path, store } = await fixture(t);
     const botId = `${channel}_projection`;
@@ -494,10 +478,10 @@ for (const [channel, createHandler, endpoints] of CHANNELS.filter(([name]) => (
     core.status = () => ({
       bots: [{ botId, configured: true }],
       provisioning: {
-        verificationUrl: 'https://example.test/qr', qrValue: 'whatsapp-qr',
+        verificationUrl: 'https://example.test/qr', qrValue: 'fixture-qr',
       },
       registration: {
-        state: 'qr_ready', attempt: 1, qrCodeUrl: 'https://accounts.feishu.cn/fixture',
+        state: 'qr_ready', attempt: 1, qrCodeUrl: 'https://example.test/qr-fixture',
       },
     });
     let projections = 0;

@@ -9,7 +9,7 @@ import { apply as applyClient } from '../plugin-src/client/index.js';
 import { CHANNEL_SESSIONS_PANEL_ID } from '../plugin-src/client/im-channels.js';
 
 const { act, create } = TestRenderer;
-const packageName = '@xmanrui/dsh-im';
+const packageName = '@xdlg93/dsh-im';
 const bundle = { kind: 'bundle', pkg: { name: packageName } };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 

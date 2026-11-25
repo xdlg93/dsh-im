@@ -1,12 +1,10 @@
 import * as React from 'react';
 import { h } from './i18n.js';
 import { SET_MESSAGE_MODE_ENDPOINT, normalizeBusyMessageMode } from '../../src/channels/shared/message-mode.mjs';
-import { normalizeFeishuStepCardPanels } from '../../src/channels/feishu/step-push-mode.mjs';
 import {
   normalizeReplyContent,
   SET_REPLY_CONTENT_ENDPOINT,
 } from '../../src/channels/shared/reply-content.mjs';
-import { FEISHU_ENDPOINTS } from './channels/feishu/api.js';
 
 /** The three switches every channel shares, in the order they are shown. */
 const REPLY_CONTENT_ROWS = Object.freeze([
@@ -21,22 +19,19 @@ function settingsFromResult(result, botId) {
   if (!bot) throw new Error('找不到要修改的机器人。');
   return {
     busyMessageMode: normalizeBusyMessageMode(bot.busyMessageMode),
-    stepCardPanels: normalizeFeishuStepCardPanels(bot.stepCardPanels),
     replyContent: normalizeReplyContent(bot.replyContent),
   };
 }
 
 const SAVE_ENDPOINTS = Object.freeze({
   busyMessageMode: SET_MESSAGE_MODE_ENDPOINT,
-  stepCardPanels: FEISHU_ENDPOINTS.setStepCardPanels,
   replyContent: SET_REPLY_CONTENT_ENDPOINT,
 });
 
-export function BotGeneralSettingsPage({ channel, account, rpcCall }) {
+export function BotGeneralSettingsPage({ account, rpcCall }) {
   const modeId = React.useId();
   const [settings, setSettings] = React.useState(() => ({
     busyMessageMode: 'queue',
-    stepCardPanels: normalizeFeishuStepCardPanels(),
     replyContent: normalizeReplyContent(),
   }));
   const [savedSettings, setSavedSettings] = React.useState(null);
@@ -135,22 +130,7 @@ export function BotGeneralSettingsPage({ channel, account, rpcCall }) {
             ...settings.replyContent, [field]: event.target.checked,
           }),
         })))),
-      channel === 'feishu' ? [
-        ['thinkingExpanded', '展开思考过程'],
-        ['toolsExpanded', '展开工具摘要'],
-      ].map(([field, label]) => h('div', { key: field, className: 'dim-botGeneralRow dim-botGeneralPanelRow' },
-        h('label', { className: 'dim-botGeneralTitle', htmlFor: `${modeId}-${field}` }, label),
-        h('div', { className: 'dim-botGeneralControl' },
-          h('input', {
-            id: `${modeId}-${field}`, type: 'checkbox', role: 'switch', className: 'dim-contextSwitch',
-            checked: settings.stepCardPanels[field], disabled: busy || savedSettings === null,
-            'aria-label': label, 'aria-describedby': `${modeId}-panels-description`,
-            onChange: (event) => void save('stepCardPanels', {
-              ...settings.stepCardPanels, [field]: event.target.checked,
-            }),
-          })))) : null),
-    channel === 'feishu' ? h('p', { className: 'dim-botGeneralHelp dim-botGeneralPanelHelp', id: `${modeId}-panels-description` },
-      '仅对实时过程卡生效，任务结束后自动收起。') : null,
+    ),
     feedback ? h('p', {
       className: 'dim-accessFeedback', 'data-tone': 'error', role: 'alert',
     }, feedback) : null,

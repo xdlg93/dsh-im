@@ -1,18 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QqHarnessBridge } from '../../../src/channels/qq/qq-bridge.mjs';
-import { FeishuHarnessBridge } from '../../../src/channels/feishu/bridge.mjs';
 import { WeixinHarnessBridge } from '../../../src/channels/weixin/weixin-bridge.mjs';
-import { WecomHarnessBridge } from '../../../src/channels/wecom/wecom-bridge.mjs';
-import { WecomAppBridge } from '../../../src/channels/wecom-app/wecom-app-bridge.mjs';
-import { DingtalkHarnessBridge } from '../../../src/channels/dingtalk/dingtalk-bridge.mjs';
 
-const shared = Object.fromEntries(await Promise.all([
-  ['slack', 'Slack'], ['telegram', 'Telegram'], ['discord', 'Discord'],
-  ['whatsapp', 'Whatsapp'], ['imessage', 'IMessage'], ['email', 'Email'], ['matrix', 'Matrix'],
-].map(async ([channel, name]) => [channel,
-  (await import(`../../../src/channels/${channel}/${channel}-bridge.mjs`))[`${name}HarnessBridge`]])));
-const channels = [...Object.keys(shared), 'qq', 'feishu', 'weixin', 'wecom', 'wecom-app', 'dingtalk'];
+const channels = ['qq', 'weixin'];
 const logger = { info() {}, warn() {}, error() {} };
 const deferred = () => {
   let resolve;
@@ -85,39 +76,18 @@ function fixture(channel, { mode = 'queue', canCommand = true } = {}) {
   }) };
   const options = { harness, state, status, logger, accessPolicy, contextEnhancement };
   let bridge;
-  if (shared[channel]) bridge = new shared[channel]({ ...options, bot: { sendText } });
   if (channel === 'qq') bridge = new QqHarnessBridge({ ...options, ownerUserOpenid: '*', bot: { sendText } });
   if (channel === 'weixin') bridge = new WeixinHarnessBridge({ ...options, ownerUserId: 'actor',
     baseUrl: 'https://ilinkai.weixin.qq.com', token: 'fixture', api: { sendText,
       inboundImages: () => [], inboundFiles: () => [] } });
-  if (channel === 'wecom') bridge = new WecomHarnessBridge({ ...options,
-    client: { sendMessage: sendText, replyStream: sendText }, generateStreamId: () => 'stream' });
-  if (channel === 'wecom-app') bridge = new WecomAppBridge({ ...options, api: { sendText } });
-  if (channel === 'dingtalk') bridge = new DingtalkHarnessBridge({ ...options,
-    clientId: 'fixture', clientSecret: 'fixture', api: { sendText } });
-  if (channel === 'feishu') bridge = new FeishuHarnessBridge({ ...options,
-    allowedSenderOpenIds: new Set(['*']), interactionCards: false, mentionTopicReply: false,
-    channel: {}, client: { im: { v1: { message: { create: async (request) => {
-      await sendText(request); return { code: 0, data: { message_id: 'reply' } };
-    } } } } } });
   function message(id, text, { actor = 'actor', group = false } = {}) {
-    if (shared[channel]) return { messageId: id, content: text, senderId: actor, kind: group ? 'group' : 'direct',
-      conversationId: 'chat', addressed: true, plainText: true, replyTarget: { id } };
     if (channel === 'qq') return { messageId: id, content: text, senderId: actor, kind: group ? 'group' : 'c2c',
       rawEventType: group ? 'GROUP_AT_MESSAGE_CREATE' : 'C2C_MESSAGE_CREATE', groupOpenid: 'chat',
       replyTarget: { scope: group ? 'group' : 'c2c', targetId: group ? 'chat' : actor, msgId: id } };
     if (channel === 'weixin') return { message_id: id, message_type: 1, from_user_id: actor, context_token: 'context',
       item_list: [{ type: 1, text_item: { text } }] };
-    if (channel === 'wecom') return { headers: { req_id: id }, body: { msgid: id, from: { userid: actor },
-      chattype: group ? 'group' : 'single', chatid: 'chat', msgtype: 'text', text: { content: text } } };
-    if (channel === 'wecom-app') return { msgid: id, from: { userid: actor }, msgtype: 'text', text: { content: text } };
-    if (channel === 'dingtalk') return { msgId: id, msgtype: 'text', text: { content: text }, senderStaffId: actor,
-      conversationType: group ? '2' : '1', conversationId: 'chat', isInAtList: true,
-      sessionWebhook: 'https://oapi.dingtalk.com/robot/reply?ticket=test' };
-    return { sender: { sender_type: 'user', sender_id: { open_id: actor } }, message: {
-      message_id: id, message_type: 'text', chat_type: group ? 'group' : 'p2p', chat_id: 'chat',
-      content: JSON.stringify({ text }), mentions: group ? [{ key: '@bot', id: { open_id: 'bot' } }] : [],
-    } };
+    return { message_id: id, message_type: 1, from_user_id: actor, context_token: 'context',
+      item_list: [{ type: 1, text_item: { text } }] };
   }
   return { bridge, harness, state, sessions, asks, steers, replies, status, first, message,
     mode: (value) => { mode = value; }, failSteer: () => { failSteer = true; },
@@ -128,7 +98,7 @@ for (const channel of channels) {
   test(`${channel}: live steering retains sender, skips queue, deduplicates and preserves commands`, async (t) => {
     const f = fixture(channel, { mode: 'steer' });
     t.after(() => f.first.resolve());
-    const group = !['weixin', 'wecom-app'].includes(channel);
+    const group = channel !== 'weixin';
     const first = f.bridge.accept(f.message('one', 'long task', { group }));
     await eventually(() => f.asks.length === 1);
     const correction = f.message('two', 'correct the task', { group, actor: group ? 'second-actor' : 'actor' });

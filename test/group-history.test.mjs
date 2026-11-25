@@ -7,12 +7,12 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { GroupHistoryStore } from '../src/channels/shared/group-history-store.mjs';
 import { GroupHistoryAccessRegistry, createGroupHistoryTools } from '../src/channels/shared/group-history-access.mjs';
-import { captureGroupHistory, groupHistoryEntry } from '../src/channels/shared/group-history.mjs';
+import { captureGroupHistory } from '../src/channels/shared/group-history.mjs';
 import { createGroupHistoryRpcHandler, GROUP_HISTORY_ENDPOINTS } from '../plugin-src/host/group-history-rpc.mjs';
 
 const DAY = 86400000;
 const base = Date.parse('2026-10-18T12:00:00Z');
-const entry = (messageId, extra = {}) => ({ channel: 'whatsapp', groupId: 'test@g.us',
+const entry = (messageId, extra = {}) => ({ channel: 'qq', groupId: 'qq-group',
   groupName: 'test', messageId, senderId: 'person', sentAt: base, text: `message ${messageId}`, ...extra });
 async function fixture(t, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-group-history-'));
@@ -124,7 +124,7 @@ test('queries paginate within byte budget and reject cross-group cursors', async
     for (const item of page.items) { assert.equal(ids.has(item.id), false); ids.add(item.id); assert.ok(item.textTruncated); }
     cursor = page.nextCursor;
     if (cursor) {
-      const other = await store.capture(entry('other', { groupId: 'other@g.us' }));
+      const other = await store.capture(entry('other', { groupId: 'qq-other' }));
       await assert.rejects(store.query(other.groupId, { cursor }), /游标无效/);
     }
   } while (cursor);
@@ -134,7 +134,7 @@ test('queries paginate within byte budget and reject cross-group cursors', async
 test('ordinary group messages are captured without discovery; private messages are excluded', async (t) => {
   const { store } = await fixture(t);
   const message = { kind: 'group', senderId: 'person', addressed: false };
-  await captureGroupHistory(store, message, entry('first', { groupId: 'new@g.us',
+  await captureGroupHistory(store, message, entry('first', { groupId: 'qq-new',
     attachments: [{ key: 'file:0', name: 'first.txt', load: () => Buffer.from('first ordinary file') }] }));
   await store.idle();
   const page = await store.query(message.groupHistory.groupId);
@@ -161,17 +161,13 @@ test('groups previously saved as disabled record automatically after upgrade', a
   await upgraded.close();
 });
 
-test('Telegram/Slack use source message identity, not delivery or thread identity', async () => {
+test('capture uses the caller-supplied source message identity, not delivery identity', async () => {
   let captured;
   const store = { capture: async (...args) => { captured = args; return { store, groupId: 'g' }; } };
   const message = { kind: 'group', senderId: 'person', addressed: false };
   await captureGroupHistory(store, message, entry('x'));
   assert.equal(captured[0].messageId, 'x');
   assert.equal(captured.length, 1);
-  const tg = groupHistoryEntry('telegram', { update_id: 20, message: { message_id: 10, chat: { id: -1 }, message_thread_id: 3 } }, message);
-  assert.equal(tg.messageId, '10'); assert.equal(tg.groupId, '-1'); assert.equal(tg.threadId, '3');
-  const slack = groupHistoryEntry('slack', { event_id: 'Ev1', team_id: 'T1', event: { channel: 'C1', ts: '1700000000.1', thread_ts: '1700000000.0' } }, message);
-  assert.equal(slack.groupId, 'C1'); assert.equal(slack.messageId, '1700000000.1');
 });
 
 test('host-bound access rejects invented, ended, Web, mixed-group and switched-session requests', async () => {

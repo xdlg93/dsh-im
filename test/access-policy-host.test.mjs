@@ -13,14 +13,7 @@ import {
   validAccessPolicyPayload,
 } from '../plugin-src/host/channels/shared/access-policy-rpc.mjs';
 import { createWeixinRpcHandler, WEIXIN_ENDPOINTS } from '../plugin-src/host/channels/weixin/rpc.mjs';
-import { createFeishuRpcHandler, FEISHU_ENDPOINTS } from '../plugin-src/host/channels/feishu/rpc.mjs';
-import { createDingtalkRpcHandler, DINGTALK_ENDPOINTS } from '../plugin-src/host/channels/dingtalk/rpc.mjs';
-import { createWecomRpcHandler, WECOM_ENDPOINTS } from '../plugin-src/host/channels/wecom/rpc.mjs';
 import { createQqRpcHandler, QQ_ENDPOINTS } from '../plugin-src/host/channels/qq/rpc.mjs';
-import { createSlackRpcHandler, SLACK_ENDPOINTS } from '../plugin-src/host/channels/slack/rpc.mjs';
-import { createTelegramRpcHandler, TELEGRAM_ENDPOINTS } from '../plugin-src/host/channels/telegram/rpc.mjs';
-import { createDiscordRpcHandler, DISCORD_ENDPOINTS } from '../plugin-src/host/channels/discord/rpc.mjs';
-import { createWhatsappRpcHandler, WHATSAPP_ENDPOINTS } from '../plugin-src/host/channels/whatsapp/rpc.mjs';
 
 const users = (values = []) => values.map((value) => (
   value && typeof value === 'object'
@@ -48,58 +41,25 @@ const allowlist = (allowlistUsers = []) => scope({
 });
 const policy = (direct = open(), group = open()) => ({ direct, group });
 
-test('Host initialization preserves the nine channel access baselines and legacy migrations', () => {
+test('Host initialization preserves each channel access baseline', () => {
   assert.deepEqual(initialAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }),
     policy(allowlist(), allowlist()));
-  assert.deepEqual(initialAccessPolicyFor('feishu', { ownerOpenIds: ['ou_owner'] }),
-    policy(allowlist(), allowlist()));
-  assert.deepEqual(initialAccessPolicyFor('feishu', { ownerOpenIds: ['*'] }), policy());
-  for (const channel of ['dingtalk', 'wecom', 'slack', 'discord']) {
-    assert.deepEqual(initialAccessPolicyFor(channel), policy());
-  }
   assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }),
     policy(allowlist(), open()));
   assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: '*' }), policy());
-  assert.deepEqual(initialAccessPolicyFor('telegram', {
-    accessMode: 'compatible', allowedUsers: ['101'],
-  }), policy(open(['101']), open()));
-  assert.deepEqual(initialAccessPolicyFor('telegram', {
-    accessMode: 'private-allowlist', allowedUsers: ['101'],
-  }), policy(allowlist(['101']), allowlist()));
-  assert.deepEqual(initialAccessPolicyFor('whatsapp', {
-    accessMode: 'self-only', accountJid: '886900000000@s.whatsapp.net',
-  }), policy(allowlist(), allowlist()));
-  assert.deepEqual(initialAccessPolicyFor('whatsapp', {
-    accessMode: 'private-allowlist',
-    accountJid: '886900000000@lid',
-    allowedNumbers: ['16505550999'],
-  }), policy(allowlist(['16505550999@s.whatsapp.net']), allowlist()));
-  assert.deepEqual(initialAccessPolicyFor('whatsapp', {
-    accessMode: 'open', allowedNumbers: ['16505550999'],
-  }), policy(open(['16505550999@s.whatsapp.net']), open()));
 });
 
-test('new Feishu and QQ bots open messages and commands for QR and manual binding', () => {
-  assert.deepEqual(newBotAccessPolicyFor('feishu', { ownerOpenIds: ['ou_owner'] }), policy());
+test('new QQ bots open messages and commands for QR and manual binding', () => {
   assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }), policy());
-  assert.deepEqual(newBotAccessPolicyFor('feishu', { ownerOpenIds: ['*'] }), policy());
   assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: '*' }), policy());
-  for (const channel of ['weixin', 'dingtalk', 'wecom', 'wecom-app', 'slack', 'telegram',
-    'discord', 'whatsapp', 'imessage', 'matrix']) {
-    assert.deepEqual(newBotAccessPolicyFor(channel), initialAccessPolicyFor(channel), channel);
-  }
+  assert.deepEqual(newBotAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }),
+    initialAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }));
 });
 
 test('Host-only owner identities are not copied into public access-policy rows', () => {
   const cases = [
     ['weixin', { ownerUserId: 'wx-private-owner' }, 'wx-private-owner'],
-    ['feishu', { ownerOpenIds: ['ou_private_owner'] }, 'ou_private_owner'],
     ['qq', { ownerUserOpenid: 'qq-private-owner' }, 'qq-private-owner'],
-    ['whatsapp', {
-      accessMode: 'private-allowlist',
-      accountJid: '886900000000@lid',
-      allowedNumbers: ['16505550999'],
-    }, '886900000000@lid'],
   ];
   for (const [channel, config, ownerId] of cases) {
     assert.equal(JSON.stringify(initialAccessPolicyFor(channel, config)).includes(ownerId), false, channel);
@@ -109,47 +69,32 @@ test('Host-only owner identities are not copied into public access-policy rows',
 test('Host access provider reads the latest committed workspace policy', () => {
   let current = policy(allowlist(), allowlist());
   const provider = accessPolicyProvider({ accessPolicyFor: () => current }, 'bot_one', {
-    channel: 'feishu', config: { ownerOpenIds: ['ou_owner', '*'] },
+    channel: 'weixin', config: { ownerUserId: 'wx-owner' },
   });
   assert.equal(provider.botId, 'bot_one');
   assert.equal(provider.getSettings(), current);
   current = policy();
   assert.equal(provider.getSettings(), current);
-  assert.equal(provider.isPrivileged(['ou_owner'], 'direct'), true);
+  assert.equal(provider.isPrivileged(['wx-owner'], 'direct'), true);
   assert.equal(provider.isPrivileged(['*'], 'group'), false);
-  assert.equal(provider.isPrivileged(['ou_other'], 'direct'), false);
-  assert.equal(provider.isPrivileged(['ou_owner'], 'unknown'), false);
-  const whatsapp = accessPolicyProvider({ accessPolicyFor: () => current }, 'bot_wa', {
-    channel: 'whatsapp',
-    config: { accountJid: '16505550100@s.whatsapp.net' },
-    equals: (left, right) => left.split('@')[0] === right.split('@')[0],
+  assert.equal(provider.isPrivileged(['wx-other'], 'direct'), false);
+  assert.equal(provider.isPrivileged(['wx-owner'], 'unknown'), false);
+  const qq = accessPolicyProvider({ accessPolicyFor: () => current }, 'bot_qq', {
+    channel: 'qq', config: { ownerUserOpenid: 'qq-owner' },
   });
-  assert.equal(whatsapp.isPrivileged(['16505550100@lid'], 'group'), true);
+  assert.equal(qq.isPrivileged(['qq-owner'], 'group'), true);
 });
 
 test('Host privileged identities come only from durable owner or legacy authorization fields', () => {
   assert.deepEqual(privilegedSenderIdsFor('weixin', { ownerUserId: 'wx-owner' }), ['wx-owner']);
-  assert.deepEqual(privilegedSenderIdsFor('feishu', { ownerOpenIds: ['*', 'ou_owner'] }), ['ou_owner']);
-  assert.deepEqual(privilegedSenderIdsFor('dingtalk', {
-    approvedSenders: [{ staffId: 'ding-owner' }, { staffId: 'ding-owner' }],
-  }), ['ding-owner']);
   assert.deepEqual(privilegedSenderIdsFor('qq', { ownerUserOpenid: '*' }), []);
   assert.deepEqual(privilegedSenderIdsFor('qq', { ownerUserOpenid: 'qq-owner' }), ['qq-owner']);
-  assert.deepEqual(privilegedSenderIdsFor('whatsapp', {
-    accountJid: '886900000000@s.whatsapp.net',
-  }), ['886900000000@s.whatsapp.net']);
-  for (const channel of ['wecom', 'slack', 'telegram', 'discord']) {
-    assert.deepEqual(privilegedSenderIdsFor(channel, { allowedUsers: ['legacy'] }), []);
-  }
 });
 
 test('confirmed owners bypass live allowlist and command restrictions without granting other users access', () => {
   const cases = [
     ['weixin', { ownerUserId: 'wx-owner' }, 'wx-owner'],
-    ['feishu', { ownerOpenIds: ['*', 'ou_owner'] }, 'ou_owner'],
     ['qq', { ownerUserOpenid: 'qq-owner' }, 'qq-owner'],
-    ['whatsapp', { accountJid: '16505550100@s.whatsapp.net' }, '16505550100@s.whatsapp.net'],
-    ['discord', { ownerUserId: '123456789012345678' }, '123456789012345678'],
   ];
   for (const [channel, config, owner] of cases) {
     let current;
@@ -250,17 +195,10 @@ function controllerFixture() {
   return { controller, calls };
 }
 
-test('all nine Host RPCs accept only the unified bot.access-policy.set contract', async () => {
+test('every Host RPC accepts only the unified bot.access-policy.set contract', async () => {
   const factories = [
     ['weixin', createWeixinRpcHandler, WEIXIN_ENDPOINTS],
-    ['feishu', createFeishuRpcHandler, FEISHU_ENDPOINTS],
-    ['dingtalk', createDingtalkRpcHandler, DINGTALK_ENDPOINTS],
-    ['wecom', createWecomRpcHandler, WECOM_ENDPOINTS],
     ['qq', createQqRpcHandler, QQ_ENDPOINTS],
-    ['slack', createSlackRpcHandler, SLACK_ENDPOINTS],
-    ['telegram', createTelegramRpcHandler, TELEGRAM_ENDPOINTS],
-    ['discord', createDiscordRpcHandler, DISCORD_ENDPOINTS],
-    ['whatsapp', createWhatsappRpcHandler, WHATSAPP_ENDPOINTS],
   ];
   const next = policy(open([], false), allowlist(['operator']));
   for (const [channel, createHandler, endpoints] of factories) {

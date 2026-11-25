@@ -1,27 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DiscordHarnessClient } from '../../../src/channels/discord/harness-client.mjs';
 import { QqHarnessClient } from '../../../src/channels/qq/harness-client.mjs';
-import { SlackHarnessClient } from '../../../src/channels/slack/harness-client.mjs';
-import { TelegramHarnessClient } from '../../../src/channels/telegram/harness-client.mjs';
-import { WecomHarnessClient } from '../../../src/channels/wecom/harness-client.mjs';
 import {
   HarnessHealthError,
   HarnessTransportError,
 } from '../../../src/channels/shared/harness-client.mjs';
 import { HarnessClient, HarnessReplyTracker } from '../../../src/channels/weixin/harness-client.mjs';
-import { WhatsappHarnessClient } from '../../../src/channels/whatsapp/harness-client.mjs';
 
-test('all legacy channel clients now use the shared Harness RPC transport', async () => {
+test('every channel client uses the shared Harness RPC transport', async () => {
   const channelClients = [
     [HarnessClient, 'weixin'],
-    [WecomHarnessClient, 'wecom'],
     [QqHarnessClient, 'qq'],
-    [SlackHarnessClient, 'slack'],
-    [DiscordHarnessClient, 'discord'],
-    [TelegramHarnessClient, 'telegram'],
-    [WhatsappHarnessClient, 'whatsapp'],
   ];
 
   for (const [Client, prefix] of channelClients) {

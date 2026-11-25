@@ -26,14 +26,7 @@ import {
   validModelPayload,
 } from '../plugin-src/host/channels/shared/model-setting-rpc.mjs';
 import { createWeixinRpcHandler, WEIXIN_ENDPOINTS } from '../plugin-src/host/channels/weixin/rpc.mjs';
-import { createFeishuRpcHandler, FEISHU_ENDPOINTS } from '../plugin-src/host/channels/feishu/rpc.mjs';
-import { createDingtalkRpcHandler, DINGTALK_ENDPOINTS } from '../plugin-src/host/channels/dingtalk/rpc.mjs';
-import { createWecomRpcHandler, WECOM_ENDPOINTS } from '../plugin-src/host/channels/wecom/rpc.mjs';
 import { createQqRpcHandler, QQ_ENDPOINTS } from '../plugin-src/host/channels/qq/rpc.mjs';
-import { createSlackRpcHandler, SLACK_ENDPOINTS } from '../plugin-src/host/channels/slack/rpc.mjs';
-import { createTelegramRpcHandler, TELEGRAM_ENDPOINTS } from '../plugin-src/host/channels/telegram/rpc.mjs';
-import { createDiscordRpcHandler, DISCORD_ENDPOINTS } from '../plugin-src/host/channels/discord/rpc.mjs';
-import { createWhatsappRpcHandler, WHATSAPP_ENDPOINTS } from '../plugin-src/host/channels/whatsapp/rpc.mjs';
 
 const MODEL = Object.freeze({ provider: 'openai', model: 'gpt-5' });
 const REASONING_MODEL = Object.freeze({ ...MODEL, reasoningEffort: 'custom-max' });
@@ -169,15 +162,15 @@ test('model saves report catalog failures through WeCom RPC, keep disk state, an
     } },
   } });
   const { controller: base } = controllerFixture();
-  base.diagnostics = createConnectionDiagnostics({ channel: 'wecom', logger: { error() {} } });
+  base.diagnostics = createConnectionDiagnostics({ channel: 'qq', logger: { error() {} } });
   const controller = createWorkspaceAwareController(base, {
     workspaces, stateFor: async () => ({}), modelCatalog: options => listModelCatalog(harness, options),
   });
-  const handler = createWecomRpcHandler(controller);
+  const handler = createQqRpcHandler(controller);
   assert.deepEqual((await controller.status()).modelCatalog, CATALOG);
   const before = await readFile(path, 'utf8');
   failure = Object.assign(new Error('private provider error: token=do-not-expose'), { code: 'ECONNRESET' });
-  const failed = await handler(WECOM_ENDPOINTS.setModel, { botId: 'bot_one', model: MODEL });
+  const failed = await handler(QQ_ENDPOINTS.setModel, { botId: 'bot_one', model: MODEL });
   assert.equal(failed.ok, false);
   assert.equal(failed.error.code, 'model-catalog-unavailable');
   assert.match(failed.error.message, /模型设置未保存/u);
@@ -197,7 +190,7 @@ test('model saves report catalog failures through WeCom RPC, keep disk state, an
   assert.equal(await readFile(path, 'utf8'), before);
 
   catalog = { ...CATALOG, failures: [{ id: 'other-provider', name: 'Other' }] };
-  const retried = await handler(WECOM_ENDPOINTS.setModel, { botId: 'bot_one', model: MODEL });
+  const retried = await handler(QQ_ENDPOINTS.setModel, { botId: 'bot_one', model: MODEL });
   assert.equal(retried.ok, true);
   assert.deepEqual(JSON.parse(await readFile(path, 'utf8')).models.bot_one, MODEL);
 
@@ -351,14 +344,7 @@ function controllerFixture() {
 test('all nine Host RPCs expose and execute the unified model-setting contract', async () => {
   const factories = [
     ['weixin', createWeixinRpcHandler, WEIXIN_ENDPOINTS],
-    ['feishu', createFeishuRpcHandler, FEISHU_ENDPOINTS],
-    ['dingtalk', createDingtalkRpcHandler, DINGTALK_ENDPOINTS],
-    ['wecom', createWecomRpcHandler, WECOM_ENDPOINTS],
     ['qq', createQqRpcHandler, QQ_ENDPOINTS],
-    ['slack', createSlackRpcHandler, SLACK_ENDPOINTS],
-    ['telegram', createTelegramRpcHandler, TELEGRAM_ENDPOINTS],
-    ['discord', createDiscordRpcHandler, DISCORD_ENDPOINTS],
-    ['whatsapp', createWhatsappRpcHandler, WHATSAPP_ENDPOINTS],
   ];
   for (const [channel, createHandler, endpoints] of factories) {
     const { controller, calls } = controllerFixture();

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "IM 机器人 (dsh-im)",
-    "description": "把微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix接入DSH。"
+    "title": "IM 机器人（微信 + QQ）",
+    "description": "把微信、QQ 扫码接入 DeepSeek Harness。在设置页「IM机器人」里扫码绑定账号后，机器人可收发消息、按群聊/私聊策略回复、增强上下文、主动推送消息，并把会话绑定到工作区。"
   }
 }

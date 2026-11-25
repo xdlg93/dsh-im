@@ -126,7 +126,7 @@ export async function runStatusCommand({
     : STATUS_FIELD_TIMEOUT_MS;
   const fieldOptions = fieldReadOptions(signal, fieldTimeout);
 
-  const label = descriptor?.label ?? 'Telegram';
+  const label = descriptor?.label ?? 'DSH';
   const lines = [t('{label}机器人与 DeepSeek Harness 连接正常。', { label })];
 
   const workspace = await settled(() => readWorkspace(harness, conversationKey));

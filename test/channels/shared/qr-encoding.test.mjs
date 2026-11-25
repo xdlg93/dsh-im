@@ -3,28 +3,22 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { PNG } from 'pngjs';
 import { createWeixinRpcHandler } from '../../../plugin-src/host/channels/weixin/rpc.mjs';
-import { createFeishuRpcHandler } from '../../../plugin-src/host/channels/feishu/rpc.mjs';
-import { createDingtalkRpcHandler } from '../../../plugin-src/host/channels/dingtalk/rpc.mjs';
-import { createWecomRpcHandler } from '../../../plugin-src/host/channels/wecom/rpc.mjs';
 import { createQqRpcHandler } from '../../../plugin-src/host/channels/qq/rpc.mjs';
-import { createWhatsappRpcHandler } from '../../../plugin-src/host/channels/whatsapp/rpc.mjs';
 import { createConnectionDiagnostics } from '../../../src/channels/shared/connection-error.mjs';
 import { normalizeDiagnosticDetails, safeDiagnosticMessage } from '../../../src/channels/shared/diagnostic-details.mjs';
 import { qrEncodingError } from '../../../src/channels/shared/qr-encoding-error.mjs';
 import { setImHostLanguage } from '../../../src/channels/shared/i18n.mjs';
 import { ConnectionError, formatConnectionDiagnostic, normalizeConnectionError } from '../../../plugin-src/client/connection-error.js';
 
-const factories = {
-  weixin: createWeixinRpcHandler, feishu: createFeishuRpcHandler,
-  dingtalk: createDingtalkRpcHandler, wecom: createWecomRpcHandler,
-  qq: createQqRpcHandler, whatsapp: createWhatsappRpcHandler,
-};
+const factories = { weixin: createWeixinRpcHandler, qq: createQqRpcHandler };
 const fakePng = 'data:image/png;base64,YWJjZA==';
 const privateText = 'private-token https://user:password@private.example/?secret=secret';
 const require = createRequire(import.meta.url);
 const qrcodeRequire = createRequire(require.resolve('qrcode/package.json'));
+// pngjs is qrcode's own renderer dependency; resolve it through qrcode so an
+// isolated (pnpm) node_modules layout still finds the same copy production uses.
+const { PNG } = qrcodeRequire('pngjs');
 const expectedDependencies = normalizeDiagnosticDetails({ dependencies: {
   qrcode: require('qrcode/package.json').version,
   pngjs: qrcodeRequire('pngjs/package.json').version,
@@ -37,17 +31,15 @@ function fixture(channel, encodeQr) {
   const logs = [];
   const logger = { error: value => logs.push(value), warn: value => logs.push(value) };
   const attempt = () => ({ attemptId: '1', status: 'pending', verificationUrl: url, qrValue: url });
-  const status = () => channel === 'feishu'
-    ? { phase: 'registering', registration: { state: 'qr_ready', attempt: 1, qrCodeUrl: url, expiresAt: Date.now() + 60_000 } }
-    : { bots: [], provisioning: attempt() };
+  const status = () => ({ bots: [], provisioning: attempt() });
   const controller = {
     diagnostics: createConnectionDiagnostics({ channel, logger }),
     status,
     startProvisioning: async () => { begins += 1; return attempt(); },
     startRegistration: async () => { begins += 1; return status(); },
-    registrationStatus: async () => channel === 'feishu' ? status() : attempt(),
+    registrationStatus: async () => attempt(),
     submitVerification: async () => attempt(),
-    cancelProvisioning: async () => attempt(), cancelRegistration: async () => status(),
+    cancelProvisioning: async () => attempt(),
     disconnect: async () => status(), bindCredentials: async () => status(),
     reconnectBot: async () => status(), deleteBot: async () => status(),
     approveSender: async () => status(), revokeSender: async () => status(),
@@ -150,7 +142,7 @@ for (const channel of Object.keys(factories)) {
     });
     const first = fx.handler('connection.status', {});
     await entered.promise;
-    const limit = channel === 'feishu' ? 32 : 16;
+    const limit = 16;
     for (let i = 0; i < limit; i += 1) {
       fx.setUrl(`https://accounts.feishu.cn/private-qr-${i}`);
       assert.equal((await fx.handler('connection.status', {})).ok, true);
@@ -179,7 +171,7 @@ for (const channel of Object.keys(factories)) {
 
 test('QR diagnostics retain standard errors but exclude untrusted fields and exception text', () => {
   const logger = { error() {} };
-  const diagnostics = createConnectionDiagnostics({ channel: 'feishu', logger });
+  const diagnostics = createConnectionDiagnostics({ channel: 'qq', logger });
   for (const code of ['ERR_INVALID_ARG_VALUE', 'ERR_OUT_OF_RANGE', 'ERR_BUFFER_OUT_OF_BOUNDS',
     'ERR_STREAM_DESTROYED', 'ERR_STREAM_PREMATURE_CLOSE', 'Z_STREAM_ERROR', 'Z_DATA_ERROR',
     'Z_MEM_ERROR', 'Z_BUF_ERROR', 'Z_VERSION_ERROR', 'MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND']) {
@@ -216,7 +208,7 @@ test('QR diagnostics preserve cancellation and translate the actionable hint', (
 });
 
 test('QR diagnostics keep the local library message that identifies the failure', () => {
-  const diagnostics = createConnectionDiagnostics({ channel: 'feishu', logger: { error() {} } });
+  const diagnostics = createConnectionDiagnostics({ channel: 'qq', logger: { error() {} } });
   const leaf = Object.assign(new TypeError('QRCode.toDataURL is not a function'), { code: 'ERR_INVALID_ARG_TYPE' });
   const result = diagnostics.report(qrEncodingError(new Error('QR encode failed', { cause: leaf }))).publicError;
   assert.equal(result.details.causeMessage, 'QRCode.toDataURL is not a function');

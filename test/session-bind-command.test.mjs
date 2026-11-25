@@ -203,19 +203,15 @@ test('the shared bridge binds locally with its conversation key and never prompt
   assert.equal(seen.has('message-session-bind'), true);
 });
 
-test('all nine channel bridges advertise /session and pass their current conversation key', async () => {
+test('every channel bridge advertises /session and passes its current conversation key', async () => {
   const bridgeFamilies = [
     ['../src/channels/shared/text-harness-bridge.mjs', 'conversationKey'],
     ['../src/channels/weixin/weixin-bridge.mjs', 'key'],
-    ['../src/channels/feishu/bridge.mjs', 'key'],
-    ['../src/channels/dingtalk/dingtalk-bridge.mjs', 'key'],
-    ['../src/channels/wecom/wecom-bridge.mjs', 'key'],
     ['../src/channels/qq/qq-bridge.mjs', 'key'],
   ];
   for (const [file, key] of bridgeFamilies) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
     if (file.endsWith('/shared/text-harness-bridge.mjs')) {
-      // Full rendered help for all four consumers is covered by command-help.test.mjs.
       assert.match(source, /commandHelpLines\(this\.#descriptor\.key, availableCommandCatalog/);
     } else {
       assert.match(source, /\/sessionlist --all  跨工作区汇总会话/);
@@ -227,25 +223,12 @@ test('all nine channel bridges advertise /session and pass their current convers
     );
   }
 
-  for (const file of [
-    '../src/channels/discord/discord-bridge.mjs',
-    '../src/channels/slack/slack-bridge.mjs',
-    '../src/channels/telegram/telegram-bridge.mjs',
-    '../src/channels/whatsapp/whatsapp-bridge.mjs',
-  ]) {
-    const source = await readFile(new URL(file, import.meta.url), 'utf8');
-    assert.match(source, /extends TextHarnessBridge/);
-  }
 });
 
 test('every non-text bridge lists the session-navigation commands in its help', async () => {
   const files = [
-    '../src/channels/dingtalk/dingtalk-bridge.mjs',
-    '../src/channels/wecom/wecom-bridge.mjs',
-    '../src/channels/wecom-app/wecom-app-bridge.mjs',
     '../src/channels/weixin/weixin-bridge.mjs',
     '../src/channels/qq/qq-bridge.mjs',
-    '../src/channels/feishu/feishu-cards.mjs',
   ];
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');

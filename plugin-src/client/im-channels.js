@@ -5,19 +5,10 @@ import { callManagementRpc } from '../management-rpc.mjs';
 import { h, IM_LOCALE_NAMESPACE, imLocale, localizeTemplate, localizeText } from './i18n.js';
 import { IM_MAIN_PANEL_ID } from './plugin-page.js';
 export const CHANNEL_LIST_RPC_CHANNEL = '/dsh-im-channels';
-export const CHANNEL_SESSIONS_PANEL_ID = 'xmanrui-dsh-im-channels';
+export const CHANNEL_SESSIONS_PANEL_ID = 'xdlg93-dsh-im-channels';
 
 const CHANNEL_LABELS = Object.freeze({
-  matrix: 'Matrix',
-  telegram: 'Telegram',
-  whatsapp: 'WhatsApp',
-  wecom: '微信客服',
-  'wecom-app': '企业微信',
-  feishu: '飞书',
-  dingtalk: '钉钉',
-  slack: 'Slack',
-  discord: 'Discord',
-  line: 'LINE',
+  weixin: '微信',
   qq: 'QQ',
 });
 

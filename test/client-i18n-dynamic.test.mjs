@@ -170,66 +170,6 @@ const COMPOSED = [
     ru: 'Проверка подключения не удалась: сеть недоступна (код обращения: abc)',
   },
   {
-    key: '{bot}的飞书授权流程',
-    values: { bot: 'My App' },
-    en: 'Feishu authorization flow for My App',
-    ru: 'Авторизация Feishu для My App',
-  },
-  {
-    key: '用于为{bot}补全权限与回调的一次性授权二维码',
-    values: { bot: 'My App' },
-    en: 'One-time QR code for completing permissions and the callback for My App',
-    ru: 'Одноразовый QR-код для дополнения разрешений и обратного вызова для My App',
-  },
-  {
-    key: '用于为{bot}开通群消息权限的一次性授权二维码',
-    values: { bot: 'My App' },
-    en: 'One-time QR code for granting group-message permission to My App',
-    ru: 'Одноразовый QR-код для выдачи разрешения на групповые сообщения для My App',
-  },
-  {
-    key: '正在为「{bot}」补全权限与回调',
-    values: { bot: 'My App' },
-    en: 'Completing permissions and the callback for “My App”',
-    ru: 'Дополняем разрешения и обратный вызов для «My App»',
-  },
-  {
-    key: '正在为「{bot}」开通群消息权限',
-    values: { bot: 'My App' },
-    en: 'Granting group-message permission to “My App”',
-    ru: 'Выдаём «My App» разрешение на групповые сообщения',
-  },
-  {
-    key: '为{bot}补全权限与回调',
-    values: { bot: 'My App' },
-    en: 'Complete permissions and the callback for My App',
-    ru: 'Дополнить разрешения и обратный вызов для My App',
-  },
-  {
-    key: '{bot}的权限与回调已补全。',
-    values: { bot: 'My App' },
-    en: 'Permissions and the callback completed for My App.',
-    ru: 'Разрешения и обратный вызов для My App дополнены.',
-  },
-  {
-    key: '{bot}的权限补全二维码已生成，请使用飞书扫码。',
-    values: { bot: 'My App' },
-    en: 'Permission-completion QR code generated for My App. Scan it with Feishu.',
-    ru: 'QR-код дополнения разрешений для My App создан. Отсканируйте его в Feishu.',
-  },
-  {
-    key: '{bot}的群消息权限二维码已生成，请使用飞书确认。',
-    values: { bot: 'My App' },
-    en: 'Group-message permission QR code generated for My App. Confirm it with Feishu.',
-    ru: 'QR-код разрешения на групповые сообщения для My App создан. Подтвердите его в Feishu.',
-  },
-  {
-    key: '{bot}已开通群消息权限，并启用“响应所有群消息”。',
-    values: { bot: 'My App' },
-    en: 'My App now has group-message permission and “Respond to all group messages” is enabled.',
-    ru: 'My App: разрешение на групповые сообщения выдано, включено «Отвечать на все групповые сообщения».',
-  },
-  {
     key: '检查连接{name}',
     values: { name: 'My Bot' },
     en: 'Check connection My Bot',
@@ -399,11 +339,8 @@ test('Russian sentences name the channel in its Russian form', (t) => {
   asLocale(RUSSIAN);
   t.after(() => setImTranslator(null));
   const CHANNELS = [
-    ['Telegram', 'Telegram'],
     ['微信', 'WeChat'],
-    ['飞书', 'Feishu'],
-    ['钉钉', 'DingTalk'],
-    ['企业微信', 'WeCom'],
+    ['QQ', 'QQ'],
   ];
   for (const [source, name] of CHANNELS) {
     const channel = channelName(source);

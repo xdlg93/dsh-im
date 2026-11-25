@@ -13,18 +13,7 @@ import { dsBotError } from './ds-bot-client.mjs';
 
 const CHANNELS = new Set([
   'weixin',
-  'feishu',
-  'dingtalk',
-  'wecom',
-  'wecom-app',
   'qq',
-  'slack',
-  'telegram',
-  'discord',
-  'whatsapp',
-  'imessage',
-  'email',
-  'matrix',
 ]);
 
 export function supportsDeliveryChannel(channel) {
@@ -84,84 +73,9 @@ function normalizeRoute(channel, kind, route) {
     case 'weixin':
       oneOf(kind, ['user']);
       return routeWithStrings(route, ['toUserId']);
-    case 'feishu':
-      oneOf(kind, ['user', 'group']);
-      return routeWithStrings(route, kind === 'user' ? ['openId'] : ['chatId']);
-    case 'dingtalk':
-      oneOf(kind, ['user', 'group']);
-      return routeWithStrings(route, kind === 'user' ? ['userId'] : ['openConversationId']);
-    case 'wecom':
-      oneOf(kind, ['user', 'group']);
-      return routeWithStrings(route, ['chatId']);
-    case 'wecom-app':
-      oneOf(kind, ['user']);
-      return routeWithStrings(route, ['chatId']);
     case 'qq':
       oneOf(kind, ['user', 'group']);
       return routeWithStrings(route, kind === 'user' ? ['userOpenId'] : ['groupOpenId']);
-    case 'slack': {
-      oneOf(kind, ['conversation', 'thread']);
-      const normalized = routeWithStrings(
-        route,
-        kind === 'conversation' ? ['channelId'] : ['channelId', 'threadTs'],
-      );
-      return normalized;
-    }
-    case 'telegram': {
-      oneOf(kind, ['chat', 'topic']);
-      exactKeys(route, kind === 'chat' ? ['chatId'] : ['chatId', 'messageThreadId'], 'route');
-      const chatId = requiredString(route.chatId, 'route.chatId');
-      if (!/^-?\d+$/.test(chatId)) throw invalidTarget('route.chatId must be a decimal string');
-      if (kind === 'chat') return { chatId };
-      if (!Number.isSafeInteger(route.messageThreadId) || route.messageThreadId <= 0) {
-        throw invalidTarget('route.messageThreadId must be a positive integer');
-      }
-      return { chatId, messageThreadId: route.messageThreadId };
-    }
-    case 'discord':
-      oneOf(kind, ['channel']);
-      return routeWithStrings(route, ['channelId']);
-    case 'whatsapp': {
-      oneOf(kind, ['user', 'group']);
-      const normalized = routeWithStrings(route, ['jid']);
-      const valid = kind === 'user'
-        ? /^\d{5,32}@(s\.whatsapp\.net|lid)$/.test(normalized.jid)
-        : /^\d{5,32}(?:-\d{1,32})?@g\.us$/.test(normalized.jid);
-      if (!valid) {
-        throw invalidTarget(`route.jid must be a ${kind} WhatsApp JID`);
-      }
-      return normalized;
-    }
-    case 'imessage':
-      oneOf(kind, ['user']);
-      return routeWithStrings(route, ['chatGuid']);
-    case 'email': {
-      oneOf(kind, ['user']);
-      const normalized = routeWithStrings(route, ['address']);
-      // Mail addresses are normalized to lower case everywhere so a target
-      // created from a mixed-case address still matches.
-      if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(normalized.address)) {
-        throw invalidTarget('route.address must be a valid email address');
-      }
-      return { address: normalized.address.toLowerCase() };
-    }
-    case 'matrix': {
-      oneOf(kind, ['room', 'thread', 'dm']);
-      const normalized = routeWithStrings(
-        route,
-        kind === 'room' ? ['roomId'] : kind === 'thread' ? ['roomId', 'threadId'] : ['userId'],
-      );
-      if (kind === 'dm' && !/^@[^:\s]+:[^\s:]+(?::\d{1,5})?$/u.test(normalized.userId)) {
-        throw invalidTarget('route.userId must be a Matrix user id');
-      }
-      if (kind !== 'dm' && !/^[!][^:$\s]+:[^\s:$]+(?::\d{1,5})?$/.test(normalized.roomId)) {
-        throw invalidTarget('route.roomId must be a Matrix room id');
-      }
-      if (kind === 'thread' && !/^\$[^\s]+/.test(normalized.threadId)) {
-        throw invalidTarget('route.threadId must be a Matrix event id');
-      }
-      return normalized;
-    }
     default:
       throw new TypeError(`Unsupported delivery channel: ${channel}`);
   }
@@ -221,7 +135,7 @@ export function sessionSyncTarget(channel, workspaces, configured) {
 }
 
 /** Describe the conversation of one channel's state that owns `sessionId`. */
-function describeFromState(state, sessionId, channel) {
+function describeFromState(state, sessionId) {
   const sessions = stateSessions(state);
   if (!sessions) return null;
   const conversationKey = Object.keys(sessions).find((key) => sessions[key] === sessionId);
@@ -229,7 +143,7 @@ function describeFromState(state, sessionId, channel) {
   const snapshot = typeof state.snapshot === 'function' ? state.snapshot() : null;
   const authors = snapshot?.authors && typeof snapshot.authors === 'object'
     && !Array.isArray(snapshot.authors) ? snapshot.authors : null;
-  const parsed = parseConversationKey(conversationKey, { channel });
+  const parsed = parseConversationKey(conversationKey);
   const author = authors?.[conversationKey] ?? null;
   return {
     conversationKey,
@@ -253,7 +167,7 @@ function botIdsOfChannel(workspaces) {
 }
 
 /** The bot and the conversation binding that own `sessionId`, awaiting each state. */
-async function findBySession(workspaces, stateOf, sessionId, channel) {
+async function findBySession(workspaces, stateOf, sessionId) {
   if (typeof sessionId !== 'string' || sessionId === '') return null;
   for (const botId of botIdsOfChannel(workspaces)) {
     let state;
@@ -264,7 +178,7 @@ async function findBySession(workspaces, stateOf, sessionId, channel) {
     }
     let binding = null;
     try {
-      binding = describeFromState(state, sessionId, channel);
+      binding = describeFromState(state, sessionId);
     } catch {
       continue;
     }
@@ -278,7 +192,7 @@ async function findBySession(workspaces, stateOf, sessionId, channel) {
  * assembly is synchronous, and a lookup that cannot answer right now has to say
  * `null` instead of starting work the caller will never see.
  */
-function findBySessionSync(workspaces, stateOf, sessionId, channel) {
+function findBySessionSync(workspaces, stateOf, sessionId) {
   if (typeof sessionId !== 'string' || sessionId === '') return null;
   for (const botId of botIdsOfChannel(workspaces)) {
     let state;
@@ -290,7 +204,7 @@ function findBySessionSync(workspaces, stateOf, sessionId, channel) {
     if (!state) continue;
     let binding = null;
     try {
-      binding = describeFromState(state, sessionId, channel);
+      binding = describeFromState(state, sessionId);
     } catch {
       continue;
     }
@@ -436,7 +350,7 @@ export function createDeliveryAdapter({
      * network, and never throws — an unknown session is simply `null`.
      */
     async describeConversationBySession(sessionId) {
-      const found = await findBySession(workspaces, stateFor, sessionId, channel);
+      const found = await findBySession(workspaces, stateFor, sessionId);
       if (found === null) return null;
       const { botId, binding } = found;
       let botName = null;
@@ -460,7 +374,7 @@ export function createDeliveryAdapter({
      */
     describeConversationBySessionSync(sessionId) {
       if (typeof stateForSync !== 'function') return null;
-      const found = findBySessionSync(workspaces, stateForSync, sessionId, channel);
+      const found = findBySessionSync(workspaces, stateForSync, sessionId);
       if (found === null) return null;
       return { channel, botId: found.botId, botName: null, ...found.binding };
     },

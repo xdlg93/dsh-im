@@ -11,8 +11,7 @@ const APPROVAL_REPLIES = new Map([
 ]);
 
 export const COMPETITIVE_APPROVAL_CHANNELS = Object.freeze([
-  'feishu', 'weixin', 'dingtalk', 'wecom', 'wecom-app', 'qq',
-  'telegram', 'slack', 'discord', 'whatsapp', 'matrix',
+  'weixin', 'qq',
 ]);
 
 const APPROVAL_UNAVAILABLE_TEXT = '机器人端无法处理这次审批，请到 Web 查看。';
@@ -359,8 +358,8 @@ export class HarnessApprovalQueue {
       return true;
     }
     // Optional channel-provided renderer. When present, the approval is shown
-    // as an interactive card (e.g. Feishu approve/reject buttons) instead of
-    // plain text. Channels that don't provide one keep the text-reply path.
+    // as an interactive card (approve/reject buttons) instead of plain text.
+    // Channels that don't provide one keep the text-reply path.
     const render = typeof context?.render === 'function' ? context.render : null;
 
     const text = harnessApprovalText(payload, {
@@ -424,7 +423,7 @@ export class HarnessApprovalQueue {
 
   /**
    * Submit an approval decision by id, as triggered by a channel card button
-   * (e.g. Feishu approve/reject). Returns false when no matching pending
+   * (approve/reject). Returns false when no matching pending
    * approval is found. Callers may pass the acting user to enforce that only
    * the originating actor can decide.
    *

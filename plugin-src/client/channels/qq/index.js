@@ -25,7 +25,7 @@ import {
   ChannelListHeading,
   LastMessageErrorSummary,
 } from '../../channel-card-meta.js';
-import { installDingtalkStyles } from '../dingtalk/styles.js';
+import { installPanelStyles } from '../shared/panel-styles.js';
 import {
   QQ_ENDPOINTS,
   connectionTestFeedback,
@@ -281,13 +281,13 @@ export function QqSettingsTab({ rpcCall }) {
   const addButtonRef = React.useRef(null);
 
   React.useEffect(() => {
-    const disposeDingtalk = installDingtalkStyles();
+    const disposePanelStyles = installPanelStyles();
     const disposeQq = installQqStyles();
     mounted.current = true;
     return () => {
       mounted.current = false;
       disposeQq();
-      disposeDingtalk();
+      disposePanelStyles();
     };
   }, []);
 

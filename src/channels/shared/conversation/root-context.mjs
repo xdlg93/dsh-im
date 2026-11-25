@@ -1,10 +1,10 @@
 /**
- * One-consumption registry for conversation roots (Feishu topic roots, Matrix
- * thread roots): the first message of a thread is context for that thread's AI
- * conversation, but it must not be re-fed on every turn.
+ * One-consumption registry for conversation roots (topic and thread roots): the
+ * first message of a thread is context for that thread's AI conversation, but it
+ * must not be re-fed on every turn.
  *
- * The contract mirrors the behavior shipped for Feishu topics in CHANGELOG
- * 4.24.1: the root rides along only until one turn using it completes
+ * The contract mirrors the behavior shipped for threaded conversations in
+ * CHANGELOG 4.24.1: the root rides along only until one turn using it completes
  * successfully — commands, rejected messages, and failed lookups or requests
  * never consume it — and a cleared, switched, or rebuilt session receives it
  * again. Anchors persist through the conversation state store's extension

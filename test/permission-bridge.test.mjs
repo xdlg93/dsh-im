@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FeishuHarnessBridge } from '../src/channels/feishu/bridge.mjs';
 import { QqHarnessBridge } from '../src/channels/qq/qq-bridge.mjs';
 import { directAccessPolicy } from './channels/access-policy-fixture.mjs';
 
@@ -36,24 +35,7 @@ function fixture(channel, canExecuteCommands = true) {
   let sequence = 0;
   let bridge;
   let event;
-  if (channel === 'feishu') {
-    bridge = new FeishuHarnessBridge({
-      client: { im: { v1: { message: { create: async ({ data }) => {
-        replies.push(JSON.parse(data.content).text);
-        return { code: 0, data: { message_id: `reply-${++sequence}` } };
-      } } } } },
-      channel: {}, harness, state, allowedSenderOpenIds: new Set(['owner']), accessPolicy,
-      status: { messagesReceived: 0, messagesReplied: 0, messagesRejected: 0 },
-    });
-    event = (id, content, media) => ({
-      sender: { sender_type: 'user', sender_id: { open_id: 'owner' } },
-      message: { chat_type: 'p2p', chat_id: 'chat', message_id: id,
-        message_type: media ? 'post' : 'text', content: JSON.stringify(media
-          ? { title: '', content: [[{ tag: 'text', text: content }, { tag: 'img', image_key: 'img' }]] }
-          : { text: content }),
-      },
-    });
-  } else {
+  {
     bridge = new QqHarnessBridge({
       bot: { sendText: async (_target, text) => replies.push(text) },
       ownerUserOpenid: 'owner', harness, state, accessPolicy,
@@ -68,7 +50,7 @@ function fixture(channel, canExecuteCommands = true) {
   return { bridge, event, replies, commands, started, finishTurn };
 }
 
-for (const channel of ['feishu', 'qq']) {
+for (const channel of ['qq']) {
   test(`${channel} dispatches numbered permission commands locally and deduplicates them`, async () => {
     const f = fixture(channel);
     await f.bridge.accept(f.event('list', '/permissionlist'));

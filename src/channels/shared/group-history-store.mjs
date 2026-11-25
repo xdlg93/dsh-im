@@ -5,7 +5,8 @@ import { chmod, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'no
 import { dirname, join, resolve } from 'node:path';
 import { stageInboundFiles } from './inbound-file.mjs';
 
-export const GROUP_HISTORY_CHANNELS = Object.freeze(['whatsapp', 'feishu', 'telegram', 'discord', 'slack', 'qq']);
+// QQ keeps a per-group history; the WeChat bot has no group-history API.
+export const GROUP_HISTORY_CHANNELS = Object.freeze(['qq']);
 export const DEFAULT_GROUP_HISTORY_DAYS = 14;
 const DAY = 86_400_000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -323,8 +324,8 @@ export class GroupHistoryStore {
   /**
    * Groups this channel has archived, newest activity first.
    *
-   * Used by channel settings that are scoped per chat (Telegram's per-group
-   * reply rules) so the panel can offer real chat IDs with their titles.
+   * Used by channel settings that are scoped per chat, so the panel can offer
+   * real chat IDs with their titles.
    */
   async listGroups({ channel } = {}) {
     await this.ready();

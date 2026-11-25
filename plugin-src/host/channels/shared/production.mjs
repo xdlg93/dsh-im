@@ -50,7 +50,7 @@ export async function createTokenProductionController(ctx, config, internals, de
     channel, ConfigStore, StateStore, HarnessClient, Controller, Runtime, runtimeOptions,
   } = definitions;
   if (!ctx?.credentials) throw new TypeError(`dsh-im ${channel} requires ctx.credentials`);
-  const connection = harnessConnection(ctx, config, { competitiveApprovals: ['telegram', 'discord'].includes(channel) });
+  const connection = harnessConnection(ctx, config, { competitiveApprovals: true });
 
   const ResolvedConfigStore = internals.ConfigStore ?? ConfigStore;
   const ResolvedStateStore = internals.StateStore ?? StateStore;
@@ -65,9 +65,9 @@ export async function createTokenProductionController(ctx, config, internals, de
   const createSupervisor = internals.createConnectionSupervisor ?? createTokenConnectionSupervisor;
   const seedAccessPolicy = typeof definitions.initialAccessPolicyForBot === 'function'
     ? definitions.initialAccessPolicyForBot
-    // Telegram is the only token channel with a legacy access model. Other
-    // current token channels preserve their fully-open baseline.
-    : (bot) => initialAccessPolicyFor(channel === 'telegram' ? 'telegram' : 'discord', bot);
+    // A channel that does not seed its own policy falls back to the one its
+    // startup migration would have written.
+    : (bot) => initialAccessPolicyFor(channel, bot);
   const logger = typeof ctx.logger === 'function'
     ? ctx.logger(`dsh-im:${channel}`) : (ctx.logger ?? console);
   const agentPresetCatalog = () => listAgentPresetCatalog(ctx);
@@ -88,8 +88,7 @@ export async function createTokenProductionController(ctx, config, internals, de
     : configStore;
   // Idempotent, and shared with createRuntime below so both paths seed a new
   // bot's workspace identically. A channel that must write something into the
-  // workspace store before the runtime exists (email pushes its sender
-  // allowlist into the access policy) needs the record to exist first —
+  // workspace store before the runtime exists needs the record to exist first —
   // setAccessPolicy refuses a bot the store has never seen. The call is safe to
   // repeat: ensure() only seeds the policy when the bot has none yet.
   const ensureWorkspace = (botId, botConfig) => workspaces.ensure(botId, {
@@ -167,8 +166,8 @@ export async function createTokenProductionController(ctx, config, internals, de
     logger,
     ...(internals.inspectToken ? { inspectToken: internals.inspectToken } : {}),
     // Optional per-channel hook: a channel whose own settings also express an
-    // access rule (email's sender allowlist) can push the derived policy into
-    // the workspace store, which is what the runtime actually reads.
+    // access rule can push the derived policy into the workspace store, which is
+    // what the runtime actually reads.
     ...(typeof definitions.accessPolicyForBot === 'function' ? {
       syncAccessPolicy: async (botId, policy) => {
         await workspaces.setAccessPolicy(botId, policy, {
@@ -203,12 +202,12 @@ export async function createTokenProductionController(ctx, config, internals, de
         ...channelRuntimeOptions,
         config: botConfig,
         token,
-        // The mailbox may authenticate with an OAuth pair instead of a password.
+        // A transport may authenticate with an OAuth pair instead of a token.
         ...(credential ? { credential } : {}),
         // A transport that rotates its tokens needs them written back.
         ...(persistTokens ? { onTokensRefreshed: persistTokens } : {}),
-        // The channel decides which transport a mailbox uses; without this the
-        // runtime falls back to its own IMAP/SMTP default.
+        // The channel decides which transport its runtime uses; without this the
+        // runtime falls back to its own default.
         ...(typeof createTransport === 'function' ? { createTransport } : {}),
         harness: workspaceScope.harness,
         state: workspaceScope.state,
@@ -216,7 +215,7 @@ export async function createTokenProductionController(ctx, config, internals, de
         commandCatalog: availableCommandCatalog(SHARED_COMMAND_CATALOG, {
           supportsFork: harness.supportsSessionFork?.(),
         }),
-        groupHistory: internals.groupHistory ?? (['telegram', 'discord'].includes(channel) ? getGroupHistoryStore(ctx, config) : undefined),
+        groupHistory: internals.groupHistory,
         // A transport that carries voice notes composes its own transcriber
         // from Host services; without one voice messages stay textless.
         ...(typeof definitions.createVoiceTranscriber === 'function'

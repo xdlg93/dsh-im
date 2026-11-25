@@ -2,61 +2,61 @@
 
 [简体中文](PROACTIVE_DELIVERY.md) · **English**
 
-Proactive delivery lets an application send a text message through a bot connected to DSH-IM without waiting for a new user message. The caller stores only a stable `botId + targetId` pair—never a Harness `sessionId`, chat reference, message ID, or temporary webhook.
+Proactive delivery lets an application send text through a bot connected to DSH-IM without a fresh user message. The caller only stores a stable `botId + targetId` pair — no Harness `sessionId`, chat reference, message ID, or temporary webhook.
 
-All nine built-in channels support proactive delivery: Weixin, Feishu, DingTalk, WeCom, QQ, Slack, Telegram, Discord, and WhatsApp.
+Both the WeChat and QQ channels support proactive delivery.
 
 ## Quick start
 
-1. Open **Settings → IM Bot** and find the bot that should send the message.
-2. Select the gear icon in the bot card's upper-right corner.
-3. Copy the **Bot ID** under **Call identifiers**.
-4. Select **New target**, then choose a known conversation or select **Enter manually (advanced)** and enter the platform-native ID.
-5. Review or enter the **Target ID**, target type, and native platform ID.
-6. Select **Test**. After the target receives `DSH-IM 主动投递测试成功。`, select **Save target**.
-7. Select **Copy call parameters** on the saved target and store the resulting `{ botId, targetId }` in the calling application.
-8. Send messages through HTTP POST, same-Host `ctx.dshIm.send()`, or the Connection RPC `message.send` endpoint.
+1. Open **Settings → IM bots** and find the bot that should send the message.
+2. Click the gear icon in the top-right corner of the bot card.
+3. Copy the `Bot ID` from **Call identifier**.
+4. Click **New target** and pick a past conversation, or use **Manual entry (advanced)** to supply the platform-native ID.
+5. Fill in or confirm the `Target ID`, target type, and platform-native ID.
+6. Click **Test**. Once the target receives the test message (in a Chinese interface: `DSH-IM 主动投递测试成功。`), click **Save target**.
+7. On the saved target, click **Copy call parameters** to get the `{ botId, targetId }` pair your application should store.
+8. Send messages with HTTP POST, the same-Host `ctx.dshIm.send()`, or the Connection RPC `message.send`.
 
 ## Configure a delivery target
 
 ### 1. Get the Bot ID
 
-`botId` is the real call identifier of the currently connected bot. Copy it from the settings page and treat it as an opaque string. Do not infer the channel from its prefix, and do not substitute the bot name, a platform App ID, or a masked ID from a card.
+`botId` is the real call identifier of a connected bot. Copy it from the settings page and treat it as an opaque string: do not infer the channel from its prefix, and do not substitute the bot name, the platform App ID, or the masked ID shown on the card.
 
-Targets belong to this bot record. Removing a bot also removes its delivery targets. After connecting it again, copy its `botId` again and recreate the required targets.
+Targets are stored per bot. Removing a bot also clears its delivery targets; after re-adding it, copy the new `botId` and configure targets again.
 
 ### 2. Create a target
 
-After selecting **New target**, the page opens a **Choose from conversations** dropdown:
+After clicking **New target**, the default view offers **Pick from past conversations**:
 
-- Suggestions come from conversation mappings already persisted for this bot. They are neither a platform address book nor a complete, strictly time-ordered recent-chat list.
-- A suggestion contains only the target type and native platform ID required for delivery. It does not contain a Harness `sessionId`, message text, message ID, conversation name, or last-active time.
-- A target already configured in the dropdown is marked **Added** and disabled.
-- When the dropdown is empty, send the bot a message on that platform and select **Refresh**. If it still does not appear, use **Enter manually (advanced)**.
+- Candidates come from that bot's persisted conversation mappings — not the platform address book, and not a strictly chronological list of recent conversations.
+- Candidates carry only the target type and platform-native ID needed for delivery; they never include the Harness `sessionId`, message text, message IDs, conversation names, or last-activity times.
+- An already-configured target shows **Added** and is disabled.
+- With no candidates, send the bot a message on that platform first, then click **Refresh**. If it still does not appear, use **Manual entry (advanced)**.
 
-Choosing a conversation only pre-fills a draft. It does not save anything automatically.
+Selecting a candidate only prefills the form; it never saves automatically.
 
 ### 3. Understand Target ID
 
-`targetId` is the stable alias you define for callers. It is not a platform user, group, or channel ID.
+`targetId` is a stable alias you define for the caller — not a platform user ID, group ID, or channel ID.
 
-- It must be unique only within one bot. Different bots may use the same `targetId`.
-- It may contain uppercase and lowercase letters, numbers, dots, underscores, colons, `@`, or hyphens, with a length of 1–128 characters.
-- New targets default to `tgt_` plus 16 random hexadecimal characters, such as `tgt_7f3a91c8d2e64b10`.
-- You may change it before the first save—for example, to `daily-report` or `release-alerts`.
-- After saving, `targetId` is read-only. You may still edit the name, target type, and native route while callers keep using the same `botId + targetId` pair.
+- It only has to be unique within one bot; different bots may reuse the same `targetId`.
+- Allowed characters are letters, digits, dots, underscores, colons, `@`, and hyphens, with a length of 1–128.
+- New targets default to `tgt_` plus 16 hex characters, for example `tgt_7f3a91c8d2e64b10`.
+- You can change it before the first save, for example to `daily-report` or `release-alerts`.
+- After saving, `targetId` is immutable, but the name, target type, and platform route can still change; callers keep using the original `botId + targetId`.
 
 ### 4. Test, save, and copy
 
-The **Test** button appears in conversation-filled drafts, manually entered drafts, and edit forms:
+Whether you create a target from a conversation, create one manually, or edit an existing one, the form shows a **Test** button at the bottom:
 
-- It is enabled only while the bot is online and every native ID required by the current target type is present.
-- It tests the target type and native ID currently shown in the form. It does not create, update, or save the target first.
-- Changing a tested native ID clears the old success result; test the new value again.
-- The **Test** button on a saved target row tests that target's currently saved route.
-- A successful test means the platform accepted the send request or its SDK returned success. It does not mean the message was read.
+- The button is enabled only when the bot is online and every platform ID the current target type needs is filled in.
+- The test uses the target type and platform IDs currently in the form; it does not create, update, or save the target first.
+- After you change a tested platform ID, the previous success notice clears and you must test again.
+- On a saved target, **Test** exercises the route currently stored for that target.
+- A successful test means the platform send API accepted the request or the SDK returned successfully; it does not mean the message was read.
 
-After saving, **Copy call parameters** copies JSON in this shape:
+After saving, **Copy call parameters** copies JSON like this:
 
 ```json
 {
@@ -65,37 +65,48 @@ After saving, **Copy call parameters** copies JSON in this shape:
 }
 ```
 
-### Configuration example: a Feishu alert group
+### Example: a QQ alert group
 
-Assume the Feishu bot has already received a message in the alert group:
+Suppose the QQ bot has already been mentioned in the alert group:
 
-1. Open that bot's settings page and copy its **Bot ID**.
-2. Select **New target**, then choose the alert group from the dropdown.
-3. Change the generated **Target ID** to `release-alerts` and set the display name to `Release alerts`.
-4. Confirm that the target type is **Group** and the group Chat ID is filled in.
-5. Select **Test** and confirm the test message in the Feishu group.
-6. Select **Save target**, then **Copy call parameters**.
+1. Open the bot's settings page and copy the `Bot ID`.
+2. Click **New target** and pick the alert group from the dropdown.
+3. Change the generated `Target ID` to `release-alerts` and set the display name to "Release alerts".
+4. Confirm the target type is **Group** and that the group Open ID is filled in.
+5. Click **Test** and confirm the test message in the QQ group.
+6. Click **Save target**, then **Copy call parameters**.
 
-If the group Chat ID is edited later, callers can continue using the same `botId + release-alerts` pair.
+If you later edit the group Open ID, callers can keep using the same `botId + release-alerts` pair.
 
-## Two-way sync for any Session conversation
+### Example: a WeChat DM reminder
 
-Session sync needs no delivery target in advance: the address comes from the Session's current chat binding, that is, the conversation key this Session has in a connected chat (a direct message, a group, a Slack thread, a Telegram forum topic, a Discord channel). **General settings → Delivery** is the only place where the sync is switched on; the delivery-targets page is only for manual delivery and for the candidate range of synced approvals and questions.
+WeChat only has DM targets:
 
-1. Ordinary prompts and `/steer` inside that chat keep using the normal reply path. They are neither duplicated nor forwarded to another target.
-2. After a successful turn from another source, only the **final answer** is sent to the chat — the text after the last tool call, not every step joined together and not the talk that precedes the tools: a turn submitted in the DSH Web GUI, a scheduled task (`schedule`, `deliveryMode: host`), an answered-question receipt, or a turn started by an internal notice such as `subagent-settled`.
-3. Whether the Web input itself is mirrored into the chat and whether model answers are delivered is decided by **General settings → Delivery**; the two prefix icons apply to the mirrored input and to the answer respectively.
-4. Only text the reader submitted in the DSH Web GUI is mirrored: the context snapshot the Host injects, schedule reminders, and internal notices are never echoed, and only the model answer is delivered. When the input mirror cannot be sent, that turn's answer is withheld too.
-5. A channel that renders the answer itself — the Feishu process card — owns that delivery: the card carries the final answer, and plain text follows only when the card did not confirm it. One answer therefore reaches the chat once, never as a card and a copy of the same text. With both switches off, the card stops together with the text, because both read the same switches.
-6. The address is read from the current binding before every delivery, so it follows `/session` changes and `/new` automatically; a Session with no binding is not delivered and raises no error, but the miss is logged with the Session, the channel and the conversation key — never the message body — so an empty chat stays diagnosable.
+1. Send the bot a message in WeChat so the plugin remembers the conversation.
+2. Open the bot's settings page, copy the `Bot ID`, click **New target**, and pick that DM from the dropdown.
+3. Change `Target ID` to `daily-reminder` and keep the target type as **Direct message**.
+4. Click **Test**; once the test message arrives in WeChat, save the target and copy the call parameters.
 
-A service injection never decides where the turn came from: the context snapshot the Host prepends, a schedule reminder or an internal notice is only "one message of this turn", never proof that a service started it. The answer is delivered as a service turn only when no message of the turn came from the reader (the Web GUI or this chat); as soon as one message came from this chat, the chat answers for itself and the sync delivers nothing at all.
+WeChat proactive sends rely on the most recent `context_token` the bot received. After a long idle period a send may fail; have the target user send a message and retry.
 
-The **Two-way Session sync** switch on a delivery target now only affects the candidate range of synced approvals and questions; it is no longer a precondition for Session sync. That candidate range stays private-chat only: mirrored text follows any route the channel persisted (a group, a Slack thread, a Telegram forum topic, a Discord channel), but a question or an approval is offered in a private chat only, because in a group any member could answer it. The first version mirrors current-Host text only—no images, files, cards, tool progress, approvals, or history. A channel with an explicit remote `harnessBaseUrl` is still unsupported.
+## Two-way session sync
+
+Session sync needs no pre-created target: the address comes from the Session's current chat binding — its conversation key in a connected chat (a WeChat DM, a QQ DM, or a QQ group). Whether to sync is decided by **General settings → Delivery**, which is the only switch; the **Delivery targets** page only serves manual delivery and the candidate scope for synced approvals and synced questions.
+
+1. Ordinary questions and `/steer` in that chat keep using the normal reply path; the sync logic never resends or forwards them to another target.
+2. When a Turn from another source finishes successfully, only the **final answer** is delivered — the text after the last tool call, not the concatenation of every step and not the chatter before the tool call. That covers Turns submitted in the Web GUI, scheduled tasks (`schedule`, `deliveryMode: host`), pending-question receipts, and internal notifications such as `subagent-settled`.
+3. Whether the text typed in the Web UI is mirrored to the chat, and whether model answers are delivered, is decided by **General settings → Delivery**; the two prefix icons apply to mirrored input and model answers respectively.
+4. Only text the reader submitted in the Web GUI is mirrored: Host-injected context snapshots, scheduled reminders, and internal notifications are never echoed, and only the model answer is delivered. If the mirror send fails, that Turn's answer is not delivered either.
+5. Answers follow each channel's capability: QQ sends a Markdown message, WeChat sends full text, and a given answer reaches the chat exactly once. With both global switches off, mirroring and answers stop together because they read the same switches.
+6. The address is read from the current binding before every delivery, so it follows `/session` switches and `/new` automatically. A Session with no binding delivers nothing and raises no error, but writes a log line without message text (Session, channel, and conversation key) so you can see why a chat received nothing.
+
+Service injection never decides a Turn's origin: the context snapshot, scheduled reminders, and internal notifications the Host injects before each Turn only say "this is one message of this Turn" and never mark the Turn as service-initiated. A Turn counts as service-initiated only when none of its messages came from the reader (the Web UI or this chat); if even one message came from this chat, the chat answers that Turn itself and the sync logic delivers nothing.
+
+The existing **Two-way session sync** switch on a target row now only affects the candidate scope for synced approvals and synced questions; it is no longer a prerequisite for session sync. That scope is still DM-only. The first version syncs text only, for the current Host: no images, files, cards, tool progress, approvals, or history. Channels with an explicit remote `harnessBaseUrl` are not supported either.
 
 ## Delivery settings
 
-**General settings → Delivery** stores plugin-wide settings rather than per-bot ones, in `<dshHome>/integrations/dsh-im/delivery-sync-settings.json`:
+**General settings → Delivery** stores global settings, not per-bot ones, in `<dshHome>/integrations/dsh-im/delivery-sync-settings.json`:
 
 ```json
 {
@@ -109,40 +120,27 @@ The **Two-way Session sync** switch on a delivery target now only affects the ca
 }
 ```
 
-- `mirrorUserInput`: mirror user text submitted in the Web GUI into the chat the Session is bound to; off by default. While it is off nothing is echoed, but the model answer is still delivered.
-- `deliverModelAnswers`: deliver model answers of turns that did not start in this chat; off by default, like the input mirror. Both switches are off in a fresh install, and an unreadable document is treated as both off: the coordinator logs a warning and delivers nothing rather than starting to mirror on its own.
-- `inputIcon` / `modelIcon`: prefix icons for the mirrored input and for the model answer. Trimmed, at most 32 characters, no line breaks or control characters; an invalid value becomes the empty string, and an empty icon means no prefix. A non-empty icon renders as "icon, blank line, text".
+- `mirrorUserInput`: mirrors text submitted in the Web GUI into the chat bound to that Session; off by default. When off, input is not sent and model answers are still delivered.
+- `deliverModelAnswers`: delivers the model answer of Turns that did not originate in this chat; off by default, matching input mirroring. A fresh install has both off, and an unreadable settings file is also treated as both off — the coordinator logs a single warning and never starts mirroring on its own.
+- `inputIcon` / `modelIcon`: prefix icons for mirrored input and model answers. Leading and trailing whitespace is trimmed, the maximum is 32 characters, and multi-line or control characters are rejected; invalid values become an empty string, and an empty string adds no prefix. A non-empty icon produces "icon + blank line + text".
 
-The settings page reads and writes this document through `settings.delivery-sync.get` / `settings.delivery-sync.set` (`set` applies only the fields it carries, and all four are optional). `settings.language.set` switches the message language between "same as the DSH interface" and `zh`/`en`/`ru`: the explicit choice outranks the DSH interface language, and the plugin `language` option still outranks both.
+The local settings page reads and writes this file through `settings.delivery-sync.get` / `settings.delivery-sync.set` (`set` applies only the fields you pass, and all four are optional). The message language is switched through `settings.language.set` between "follow the DSH interface language" and `zh` / `en` / `ru`: an explicit choice outranks the DSH interface language, and the plugin's `language` option outranks both.
 
-## Native fields for all nine channels
+## Native fields for both channels
 
-Choose a known conversation whenever possible. Obtain and enter a platform-native ID manually only when the target is missing from the suggestions.
+Prefer picking from past conversations. Only when the target is missing from the candidates do you need the platform-native IDs below.
 
-| Channel | Target type | Required field | Example or note |
+| Channel | Target type | Field to fill in | Example or note |
 | --- | --- | --- | --- |
-| Weixin | `user` | Weixin user ID (`toUserId`) | Enter the user ID that should receive messages |
-| Feishu | `user` | Open ID (`openId`) | For example, `ou_xxx` |
-| Feishu | `group` | Group Chat ID (`chatId`) | For example, `oc_xxx` |
-| DingTalk | `user` | User ID (`userId`) | Enter the DingTalk user ID |
-| DingTalk | `group` | Group Open Conversation ID (`openConversationId`) | Proactive delivery never uses a temporary `sessionWebhook` |
-| WeCom | `user` | User ID (route field: `chatId`) | Enter the user ID for a direct message |
-| WeCom | `group` | Group Chat ID (`chatId`) | Enter the group's `chatid` |
+| WeChat | `user` | WeChat user ID (`toUserId`) | The WeChat user ID that receives the message |
 | QQ | `user` | User Open ID (`userOpenId`) | The platform's `user_openid` |
 | QQ | `group` | Group Open ID (`groupOpenId`) | The platform's `group_openid` |
-| Slack | `conversation` | Channel ID (`channelId`) | For example, `C0123456789` |
-| Slack | `thread` | Channel ID + thread timestamp (`channelId`, `threadTs`) | For example, `1712345678.123456` |
-| Telegram | `chat` | Chat ID (`chatId`) | A decimal string, such as `-1001234567890` |
-| Telegram | `topic` | Chat ID + Topic ID (`chatId`, `messageThreadId`) | Topic ID must be a positive integer |
-| Discord | `channel` | Channel ID (`channelId`) | DMs, channels, and Threads all use a messageable Channel ID |
-| WhatsApp | `user` | User JID (`jid`) | For example, `8613800000000@s.whatsapp.net` |
-| WhatsApp | `group` | Group JID (`jid`) | For example, `1234567890-123456@g.us` |
 
-Native ID strings must be nonempty and have no leading or trailing whitespace. A target accepts only the fields required by the selected channel and type; extra fields are rejected.
+Platform ID strings must be non-empty and free of leading or trailing whitespace. A target accepts only the fields its channel and type require; extra fields are rejected.
 
 ## Send through HTTP POST
 
-An ordinary external application can call the Host's proactive-delivery endpoint directly:
+A plain external application can call the Host's proactive delivery endpoint directly:
 
 ```bash
 curl --request POST \
@@ -151,27 +149,27 @@ curl --request POST \
   --data '{
     "botId": "bot_9577c8572d454122a4ef7fb4d8420a91",
     "targetId": "release-alerts",
-    "text": "The build has completed."
+    "text": "The build has finished."
   }'
 ```
 
-A successful request returns:
+A successful response:
 
 ```json
 { "sent": true }
 ```
 
-The body accepts the required `botId`, `targetId`, and `text` fields, plus optional `format` (`plain` or `markdown`, default `plain`), with a maximum total JSON size of 1 MiB. Do not add a native platform route, `sessionId`, `chatRef`, temporary webhook, or `idempotencyKey`.
+The body requires `botId`, `targetId`, and `text`, and accepts an optional `format` (`plain` or `markdown`, default `plain`); the whole JSON body may not exceed 1 MiB. Do not add platform routes, `sessionId`, `chatRef`, temporary webhooks, or `idempotencyKey`.
 
-The fixed endpoint is `POST /api/dsh-im/delivery/messages`. It reuses the current DSH Host WebServer and does not open another port. Port `3080` is the default for the Web profile; use the address printed by the running Host when it differs.
+The path is fixed at `POST /api/dsh-im/delivery/messages` and reuses the current DSH Host WebServer, so it opens no extra port. The `3080` above is the default Web profile port; use whatever address the Host prints at startup.
 
-The HTTP endpoint currently has no authentication and does not provide CORS. Use it only on the local machine or a trusted network; never expose it directly to the public internet.
+The HTTP endpoint has no authentication and no CORS. Use it only on the local machine or a trusted network, and never expose it to the public internet.
 
 ## Send from a plugin in the same Host
 
-A consumer plugin can declare the `dshIm` injection and call the shared service directly without going through Connection RPC.
+A consumer plugin that declares the `dshIm` injection can call the shared service directly, without Connection RPC.
 
-This minimal example sends one message when the plugin loads:
+Here is a minimal example that sends one message when the plugin loads:
 
 ```js
 export const inject = ['dshIm'];
@@ -180,81 +178,74 @@ export async function apply(ctx) {
   const result = await ctx.dshIm.send(
     'bot_9577c8572d454122a4ef7fb4d8420a91',
     'release-alerts',
-    'The build has completed.',
+    'The build has finished.',
   );
 
   if (result.sent !== true) {
-    throw new Error('Proactive delivery did not return success');
+    throw new Error('Proactive delivery did not report success');
   }
 }
 ```
 
-In a real plugin, call `ctx.dshIm.send()` from your existing scheduled job, build callback, or business-event handler. Its optional fourth argument supports an abort signal and a text format:
+In practice, call `ctx.dshIm.send()` from your scheduled task, build callback, or business event handler. The optional fourth argument accepts a cancellation signal and a text format:
 
 ```js
-await ctx.dshIm.send(botId, targetId, text, { signal }); // Keep existing default behavior
-await ctx.dshIm.send(botId, targetId, '# Daily report\n\n**Checks complete**', {
+await ctx.dshIm.send(botId, targetId, text, { signal }); // unchanged default behaviour
+await ctx.dshIm.send(botId, targetId, '# Daily report\n\n**Checks passed**', {
   signal,
   format: 'markdown',
 });
 ```
 
-`format` accepts only `plain` and `markdown`, defaulting to `plain`. HTTP and `message.send` RPC accept the same optional field. Markdown uses the existing channel delivery paths, without starting a Session or a new stream:
+`format` accepts only `plain` and `markdown` and defaults to `plain`. HTTP and the `message.send` RPC accept the same field. Markdown reuses each channel's send path without starting a Session or a new stream:
 
 | Channel | Markdown presentation |
 | --- | --- |
-| Feishu/Lark | Native Markdown card |
-| Telegram | Rich Markdown, with the existing text fallback |
-| QQ | Markdown message; known format rejection falls back for the current chunk |
-| DingTalk | Proactive Markdown message; definite format rejection falls back to text |
-| Slack | Standard Markdown block with top-level notification text; explicit block rejection falls back to the existing text sender |
-| WeCom bot | Existing Markdown message type |
-| Matrix | Sanitized HTML with a text body |
-| Discord | Native Markdown in message content |
-| WhatsApp | Limited conversion of common formatting; code is protected and complex syntax stays literal |
-| WeCom app / Weixin | Full text, including code and link destinations |
+| QQ | A Markdown message; a known format rejection falls back to text for that chunk only |
+| WeChat | Full text, preserving code blocks and link targets |
 
-Channels apply their own message limits and splitting. Feishu proactive cards retain their existing unsplit behavior and do not automatically resend as text after rejection or an uncertain result. Other newly added fallback paths only handle local formatting errors or definite format rejection; they do not resend accepted chunks or retry ambiguous network outcomes. Older Hosts may ignore `format`; load the updated plugin on the Host.
+Long messages are split per channel limit (WeChat keeps its 1,800-character budget). Fallbacks cover only local formatting errors or explicit format rejections; the plugin never resends a chunk that already succeeded and never changes format when the network result is unknown. An older Host may ignore `format`, so load the updated plugin.
 
-Session sync requests Markdown for the final assistant answer and plain text for mirrored Web input. Both follow the Session binding through the ordinary delivery path and no longer use Feishu's dedicated mirror cards, so Feishu receives that same text.
+The final assistant answer for session sync requests Markdown, while mirrored Web input uses plain text; both go through the normal delivery path using the Session's bound address.
 
-A same-Host plugin may also list the saved targets for one bot:
+A same-Host plugin can also list a bot's saved targets:
 
 ```js
 const targets = await ctx.dshIm.listTargets(botId);
 // [{ targetId, name?, kind, route }, ...]
 ```
 
-A same-Host plugin may also register a known conversation route as a delivery target. Once registered, that `targetId` can be used with `send` and appears in the settings target list. This example registers a Feishu direct message, so `botId` must belong to a Feishu bot:
+A same-Host plugin can register a known conversation route as a delivery target. The `targetId` then works with `send` and appears in the settings page's target list. The example below uses a QQ DM, so `botId` must belong to a QQ bot:
 
 ```js
 await ctx.dshIm.createTarget(botId, {
   targetId: 'release-alerts',
   kind: 'user',
-  route: { openId: 'ou_xxx' },
-  name: 'Release alerts',       // optional
+  route: { userOpenId: 'A1B2C3D4E5F6' },
+  name: 'Release reminders',     // optional
 });
 ```
 
-Both `kind` and `route` must match the bot's channel; see [Native fields for all nine channels](#native-fields-for-all-nine-channels). For example, a Feishu group uses `kind: 'group'` with `route: { chatId: 'oc_xxx' }`. A Telegram direct message or group uses `kind: 'chat'` with `route: { chatId: '123456789' }`, where the Chat ID must be a decimal string.
+`kind` and `route` must match the bot's channel; see [native fields for both channels](#native-fields-for-both-channels). A QQ group uses `kind: 'group'` with `route: { groupOpenId: '...' }`; a WeChat DM uses `kind: 'user'` with `route: { toUserId: '...' }`.
 
-An existing `targetId` is rejected with `target-conflict`; updating or deleting a saved target still goes through the management RPC's `target.update` / `target.delete`.
+An existing `targetId` is rejected with `target-conflict`; changing or deleting an existing target still goes through the management RPC's `target.update` / `target.delete`.
 
-Companion plugins can discover configured bots through the same Host service:
+A same-Host plugin can discover configured bots through the same service:
 
 ```js
 const bots = await ctx.dshIm.listBots();
 // [{ botId, channel }, ...]
 ```
-The result contains stable public metadata only; it never includes credentials, platform routes, or target data.
 
-On failure, the Promise rejects with an Error whose `code` is one of the public error codes below.
+The result carries only stable public metadata — no credentials, platform routes, or target contents.
+
+A failed call rejects the Promise; `error.code` uses the shared error codes listed later in this document.
 
 ## Send through Connection RPC
 
-Connection RPC is for a caller that already holds a `connection` client for the current DSH Host. The settings page also uses it to manage targets. Ordinary external applications should prefer the HTTP POST endpoint above.
+Connection RPC suits callers that already hold the current DSH Host `connection` client, and it is what the settings page uses to manage targets. Plain external applications should prefer the HTTP POST above.
 
-First unwrap the RPC success and error envelopes:
+First wrap the RPC success and error envelopes:
 
 ```js
 const DELIVERY_CHANNEL = '/dsh-im-delivery';
@@ -276,19 +267,19 @@ async function callDelivery(connection, endpoint, payload, signal) {
 }
 ```
 
-Then send text with the copied `botId + targetId` pair:
+Then send text with the copied `botId + targetId`:
 
 ```js
 const result = await callDelivery(connection, 'message.send', {
   botId: 'bot_9577c8572d454122a4ef7fb4d8420a91',
   targetId: 'release-alerts',
-  text: 'The build has completed.',
+  text: 'The build has finished.',
 });
 
 // result: { sent: true }
 ```
 
-`message.send` accepts `{ botId, targetId, text, format? }`; `format` must be `plain` or `markdown`. Do not add a native route, `sessionId`, `chatRef`, temporary webhook, or `idempotencyKey`.
+`message.send` accepts `{ botId, targetId, text, format? }`, where `format` is `plain` or `markdown`. Do not add platform routes, `sessionId`, `chatRef`, temporary webhooks, or `idempotencyKey`.
 
 ### Example: deliver a daily report
 
@@ -298,11 +289,11 @@ async function sendDailyReport(connection, summary) {
     await callDelivery(connection, 'message.send', {
       botId: 'bot_9577c8572d454122a4ef7fb4d8420a91',
       targetId: 'daily-report',
-      text: `Daily operations summary\n\n${summary}`,
+      text: `Today's summary\n\n${summary}`,
     });
   } catch (error) {
     if (error.code === 'bot-not-connected') {
-      // Let the application decide whether to retry after reconnection.
+      // Decide in your own business logic whether to retry after reconnection.
       return { delivered: false, reason: 'offline' };
     }
     throw error;
@@ -313,62 +304,62 @@ async function sendDailyReport(connection, summary) {
 
 ## Management RPC reference
 
-The settings page manages targets through the same Connection RPC channel. Most callers need only `message.send`; use the other endpoints only when the caller must manage targets itself.
+The settings page manages targets through the same Connection RPC channel. Most callers only need `message.send`; use the other endpoints when you manage targets yourself.
 
 Every response is either `{ ok: true, value }` or `{ ok: false, error: { code, message, details } }`.
 
-| Endpoint | Payload | Successful `value` |
+| Endpoint | Payload | `value` on success |
 | --- | --- | --- |
 | `message.send` | `{ botId, targetId, text }` | `{ sent: true }` |
 | `target.list` | `{ botId }` | `{ botId, channel, targets }` |
 | `target.suggestion.list` | `{ botId }` | `{ botId, channel, suggestions }` |
-| `target.create` | `{ botId, target: { targetId, name?, kind, route } }` | The complete created target |
-| `target.update` | `{ botId, targetId, target: { name?, kind, route } }` | The complete updated target |
+| `target.create` | `{ botId, target: { targetId, name?, kind, route } }` | The created target |
+| `target.update` | `{ botId, targetId, target: { name?, kind, route } }` | The updated target |
 | `target.delete` | `{ botId, targetId }` | `{ deleted: true }` |
-| `target.session-sync.set` | `{ botId, targetId, enabled }` | `{ enabled, state }`; manages DM sync from the local settings UI |
+| `target.session-sync.set` | `{ botId, targetId, enabled }` | `{ enabled, state }`; only for the local settings page |
 | `target.test` | `{ botId, targetId }` | `{ sent: true }` |
-| `target.test` | `{ botId, target: { kind, route } }` | `{ sent: true }`; tests a draft without saving it |
+| `target.test` | `{ botId, target: { kind, route } }` | `{ sent: true }`; draft test, nothing saved |
 
-Payloads are validated with exact fields. The inner `target` in `target.update` must not contain `targetId`; a draft test must not contain `targetId` or `name`. Every target returned by `target.list` includes read-only `sessionSync: { enabled, state }`, where `state` is `off`, `active`, `waiting`, or `unavailable`; the internal private-conversation key is never returned to the client.
+Fields are validated strictly. The inner `target` of `target.update` must not contain `targetId`, and a draft test must not contain `targetId` or `name`. Each target returned by `target.list` carries a read-only `sessionSync: { enabled, state }`, where `state` is `off`, `active`, `waiting`, or `unavailable`; internal DM keys are never returned to the client.
 
 ## Error handling
 
-An HTTP failure returns `{ "error": { "code", "message", "details" } }`. Same-Host and RPC calls use the same error codes without an HTTP status.
+HTTP failures use `{ "error": { "code", "message", "details" } }`. The same-Host service and RPC use identical codes without HTTP statuses.
 
 | Error code | HTTP status | Meaning and suggested action |
 | --- | --- | --- |
 | `bad-request` | 400 | Invalid request shape, ID format, JSON, or text; check field names and remove extra fields |
-| `unknown-bot` | 404 | The current Host does not own this `botId`; copy it again from bot settings |
-| `unknown-target` | 404 | The bot has no such `targetId`; check the copied pair or whether the target was deleted |
-| `target-conflict` | 409 | The same bot already has this `targetId`; choose another alias |
-| `invalid-target` | 422 | The target type or native ID violates this channel's rules; select the correct type and verify the ID |
-| `bot-not-connected` | 503 | The bot is offline; let the caller decide whether to retry after reconnection |
-| `target-rejected` | 422 | The platform explicitly rejected the target or the bot lacks permission; check platform permissions and the target ID |
-| `delivery-failed` | 502 | A network, platform, or other safely redacted delivery failure; check bot state and Host logs |
-| `session-sync-unavailable` | — | The target is not a confirmed current-Host DM, has no current Session, or uses a remote Harness; create it from a known DM and establish a Session first |
-| `cancelled` | 408 | The call was cancelled; stop or start a new call as required by the application |
+| `unknown-bot` | 404 | `botId` does not belong to this Host; copy it again from the bot settings page |
+| `unknown-target` | 404 | No such `targetId` under that bot; check the copy or whether the target was deleted |
+| `target-conflict` | 409 | The same `targetId` already exists under this bot; choose another alias |
+| `invalid-target` | 422 | Target type or platform ID violates the channel rules; re-select the type and verify the ID |
+| `bot-not-connected` | 503 | The bot is offline; the caller decides whether to retry after reconnection |
+| `target-rejected` | 422 | The platform explicitly rejected the target or the bot lacks send permission; check platform permissions and the target ID |
+| `delivery-failed` | 502 | Network, platform, or another failure that cannot be safely classified; check connection state and Host logs |
+| `session-sync-unavailable` | — | The target is not a verifiable DM on this Host, no current Session exists, or the channel uses a remote Harness; create the target from a past DM and establish a Session |
+| `cancelled` | 408 | The call was cancelled; finish or restart it as your business requires |
 
-The HTTP protocol layer may also return `method-not-allowed` (405), `unsupported-media-type` (415), or `payload-too-large` (413).
+The HTTP layer may also return `method-not-allowed` (405), `unsupported-media-type` (415), or `payload-too-large` (413).
 
 ## Delivery semantics and limits
 
-- Proactive delivery currently accepts nonempty text only. This API does not send images, files, cards, or rich content.
-- The maximum HTTP JSON request body is 1 MiB.
-- `{ sent: true }` means the platform accepted the send request or its SDK returned success. It does not guarantee final delivery or a read receipt.
-- DSH-IM stores no proactive-delivery history, generates no `deliveryHandle` or `idempotencyKey`, and performs no automatic retry.
-- Retrying after a caller timeout can create duplicate messages. When business idempotency matters, the caller must store its own event ID and processing result.
-- Normal delivery uses only a saved `botId + targetId`. Keep the native route in target configuration instead of sending it with every message.
-- One call sends to one target. Notify multiple targets with separate calls and handle each result separately.
-- Targets remain editable while a bot is offline, but testing and delivery require a connected bot.
-- WeChat proactive sends, connection tests, and deferred task results use the latest `context_token` received from the corresponding user by that bot. Context is stored only in the Host account state and restored after restart; it is never included in delivery targets or returned to callers. Rebinding with a different login credential clears it. After upgrading, an inbound user message is needed to populate the cache.
-- iLink server rules still govern whether WeChat accepts a send. Healthy long polling does not guarantee proactive delivery. If `ret=-2 prepare failed` persists, avoid repeated heartbeat messages as a renewal strategy; ask the recipient to send a message before retrying. This error alone does not establish login expiry, context expiry, or exhausted quota.
-- Long proactive WeChat text uses the existing 1,800-character chunk budget. Synced assistant Markdown keeps complete code fences in each chunk. Each chunk consumes a platform send; splitting does not remove server quotas. A rejection or uncertain result stops delivery and reports failure without resending accepted chunks. Diagnostics identify the failed chunk and total chunk count.
-
-- Failed WeChat proactive sends remain visible in the account’s latest message error, with sanitized diagnostics including the provider code and whether context was included. Healthy polling does not clear this error; a successful outbound send does. HTTP/RPC still return the existing `delivery-failed` error, with no automatic retry or disconnection of healthy long polling.
+- Proactive delivery sends non-empty text only; the interface cannot send images, files, cards, or rich text.
+- The HTTP JSON body is limited to 1 MiB.
+- `{ sent: true }` means the platform send API accepted the request or the SDK returned successfully; it promises neither final delivery nor a read receipt.
+- DSH-IM stores no proactive delivery history, generates no `deliveryHandle` or `idempotencyKey`, and never retries automatically.
+- Retrying after a caller timeout can duplicate a message; if you need idempotency, store your own business event IDs and outcomes.
+- Real sends use only the saved `botId + targetId`. Platform-native routes live in the target configuration and should not travel with each message.
+- One call sends to one target. To notify several targets, call once per target and handle each result.
+- While a bot is offline you can still edit targets, but you cannot test or send.
+- WeChat proactive delivery, connection tests, and deferred task results use the `context_token` of the corresponding user the bot most recently received a message from. That context lives only in the Host's account state, survives restarts, and is never stored in a delivery target or returned to callers; rebinding with new login credentials clears it. After an upgrade, the bot needs one inbound user message before the cache exists.
+- Whether WeChat accepts a send still depends on iLink server rules. A healthy long poll does not guarantee proactive sends; if `ret=-2 prepare failed` persists, do not send heartbeats to extend the session. Have the target user send a message and retry. That error is neither proof of expired credentials nor proof that the context expired or the quota ran out.
+- WeChat proactive long text keeps the 1,800-character budget, and Markdown code fences are closed in every chunk. Each chunk consumes a platform send; splitting does not lift platform quotas. On rejection or an uncertain result the plugin stops and reports failure without resending accepted chunks, and diagnostics name the failed chunk and the total.
+- A failed WeChat proactive send stays in the account's last-message error with the platform error code and masked diagnostics such as whether context was attached. Health polling does not clear it; a later successful delivery does. HTTP/RPC still returns `delivery-failed` and never retries or drops the healthy long-poll connection.
+- QQ proactive sends are subject to platform message quotas and file upload quotas; an exhausted quota returns an explicit error so the caller can retry later.
 
 ## HTTP and RPC reachability
 
-The HTTP endpoint is registered only when the current Host provides a WebServer, and it uses that server's existing listen address and port. A Web profile normally defaults to `127.0.0.1:3080`, which is reachable only from the same machine. To call it from another machine, bind the WebServer to a reachable address in that profile's `cordis.patch.yml`, then restart the Host. For example:
+The HTTP endpoint is registered only when the current Host provides a WebServer, and it uses that server's address and port. The default Web profile usually listens on `127.0.0.1:3080` and is reachable only locally. To call it from another machine, bind the WebServer to a reachable address in that profile's `cordis.patch.yml` and restart the Host:
 
 ```yaml
 - id: webserver
@@ -376,96 +367,36 @@ The HTTP endpoint is registered only when the current Host provides a WebServer,
     host: '0.0.0.0'
 ```
 
-This also expands network reachability for the other pages and routes on that WebServer. Because the proactive-delivery HTTP endpoint currently has no authentication, use it only with a trusted LAN, firewall, or reverse proxy, and never expose it directly to the public internet.
+That also widens network reachability for every other page and route on the same WebServer. The proactive delivery endpoint has no authentication, so pair it with a trusted LAN, a firewall, or a reverse proxy — never expose it to the public internet.
 
-Connection RPC accepts loopback callers by default. If a Web profile is deliberately served on a trusted LAN, it can reuse the existing Host authority in that profile's `cordis.patch.yml`:
+Connection RPC allows loopback calls from the current Host by default. If the Web profile deliberately runs on a trusted LAN, reuse the existing Host authority in that profile's `cordis.patch.yml`:
 
 ```yaml
-- id: xmanrui-dsh-im
+- id: xdlg93-dsh-im
   config:
     rpcAuthority: trusted-host
 ```
 
-`trusted-host` is only a Host/Origin reachability boundary, not user authentication. Callers that can reach that trusted-network authority can also access bot-management endpoints. Enable it only on a trusted network.
+`trusted-host` is a Host/Origin reachability boundary, not user authentication. With it enabled, any caller that can reach that trusted authority can also reach the bot management interfaces; use it only on a trusted network.
 
 ## Troubleshooting
 
 ### The target conversation is missing from the dropdown
 
-Send that bot a message on the platform, return to settings, and refresh. Suggestions are not a complete platform conversation directory. Use **Enter manually (advanced)** if the target still does not appear.
+Send the bot a message on that platform first, then refresh the settings page. Candidates are not the platform's full conversation directory; if it still does not appear, use **Manual entry (advanced)**.
 
 ### The Test button is disabled
 
-Make sure the bot is online and every native ID required by the current target type is present. A Slack Thread and a Telegram Topic both require two fields.
+Confirm the bot is online and that every platform ID the current target type needs is filled in. A QQ group needs the group Open ID; a WeChat DM needs the WeChat user ID.
 
 ### Can Target ID be changed after saving?
 
-No. You can edit its name, type, and native route without changing call parameters. If the alias itself must change, create a new target, migrate callers, and then delete the old target.
+No. You can edit the name, type, and platform route while keeping the call parameters unchanged; if you must change `targetId`, create a new target, switch the caller over, and then delete the old one.
 
 ### Why not use sessionId?
 
-A `sessionId` identifies a Harness Session. It is not a uniform, stable message address across the nine platforms. Proactive delivery uses the stable bot and saved-target pair instead.
+A `sessionId` identifies a Harness session, not a stable, platform-independent message address. Proactive delivery uses the stable combination of a bot and a saved target.
 
 ### The test succeeded, but the recipient cannot see the message
 
-A successful test proves only that the platform accepted the send. Check bot permissions, platform restrictions, target accuracy, and client-side filtering or archive settings.
-
-## Checked proactive sending for companion plugins
-
-The same-Host `dshIm` Service exposes `contractVersion: 1`, `describeBot(botId)` and `sendChecked(botId, targetId, text, options)`. The initial authenticated-account implementation supports Feishu/Lark; other channels explicitly report `capability-unavailable` until they implement the contract. Existing `send`, HTTP and management RPC behavior remains unchanged.
-
-`describeBot` returns `{version: 1, botId, channel, account: {fingerprint, name?}, connected, capabilities}`. The `proactive-text-checked` capability is not a user grant. Feishu/Lark resolves credentials through the credentials service and verifies the current platform Bot Open ID. Its lowercase SHA-256 fingerprint is derived from UTF-8 `JSON.stringify({provider:'feishu', domain, appId, botOpenId})` in that field order. It never returns credentials or tokens and rejects a principal different from the configured verified bot. Discovery is asynchronous during Host startup; refresh after channel initialization.
-
-Options require `expectedFingerprint` and `expectedTargetDigest` and optionally accept `signal` and `format`. Derive the target digest from lowercase SHA-256 of UTF-8 `JSON.stringify({kind, route})`, with route keys sorted by ascending JavaScript string code-unit order. Names and aliases do not affect this digest. The service checks the currently saved target, freezes its normalized route, revalidates the authenticated account inside the account transition and sends that frozen route. Editing an alias during verification cannot redirect the request. Removing or changing a target before lookup rejects the request; after a request starts, changes cannot undo its external effect.
-
-`account-unverified`, `account-changed`, `target-changed` and `capability-unavailable` are pre-send refusals; credential lookup and platform authentication failures also return `account-unverified`. `{sent:true}` still means platform acceptance, not delivery/read. SDK cancellation after start, timeout and other ambiguous outcomes are not proof that nothing was sent. The caller owns durable authorization, intent/attempt records and reconciliation and must not blindly retry. Provider Registration disposal or controller closure rejects checked sends whose SDK request has not started, including disposal during the final account verification; it cannot unsend an already started SDK request.
-
-## Exclusive Feishu/Lark text intake (same Host)
-
-Applications with their own durable message store can use `ctx.dshIm` (`inboundVersion: 1`) instead of the standalone DSH Session bridge. This is an opt-in Feishu/Lark capability; other channels and accounts that have never opted in retain their existing behavior.
-
-```js
-const account = await ctx.dshIm.describeBot(botId);
-const dispose = await ctx.dshIm.consumeInbound(botId, {
-  expectedFingerprint: account.account.fingerprint,
-  signal: lifecycleSignal,
-  async onEvent(event, { signal }) {
-    // Authorize the conversation, deduplicate by provider event/message ID,
-    // and commit into the application's canonical store before acknowledging.
-    await application.acceptDurably(event, { signal });
-    return { accepted: true };
-  },
-});
-// Later, use the same verified account and the exact event.reply route:
-await ctx.dshIm.replyChecked(botId, event.reply, 'Acknowledged', {
-  expectedFingerprint: account.account.fingerprint,
-  signal: lifecycleSignal,
-});
-// Release with the application's Registration/Fiber lifecycle:
-dispose();
-```
-
-Check the account's `exclusive-text-consumer` and `reply-text-checked` capabilities before enabling reception. Only one consumer may own an account; conflicts fail with `consumer-conflict`. The Host-only callback is not exposed through browser RPC or HTTP.
-
-A version-1 event contains `channel`, `botId`, authenticated `fingerprint`, `eventId`, `messageId`, `actor: {kind: 'user', id}`, `conversation: {kind: 'group' | 'dm', id}`, `mentions: [{id, key}]`, `mentionedAccount`, ISO `at`, original `text`, and `reply: {messageId, conversationId, actorId, threadId?, rootId?, parentId?}`. These are platform-native IDs; optional server names are display-only; avatars and attachments are outside this slice. Bounded history is described below. Applications decide which conversations/messages to accept and when to wake an agent.
-
-The mode is saved per account as `consumerMode: 'external-consumer'`. In that mode the native Session bridge, card callbacks and slash commands do not run. Releasing the consumer, losing its Registration, or restarting the Host does not restore standalone processing; intake fails closed until a consumer registers again. Returning to standalone requires an explicit configuration change and reconnect. A consumer must cooperate with cancellation while committing; releasing a consumer cannot undo an application commit already completed.
-
-Checked replies re-read the original message and compare sender, conversation, thread, root and parent IDs before sending. A topic reply uses Lark's original-topic reply operation; it never falls back to the group mainline. Missing/changed sources fail with `stale-route`. An SDK failure after attempting the reply returns `reply-result-unknown`: inspect the external conversation before retrying. Provider redelivery has no resume cursor and may have gaps; this contract does not promise exactly-once transport, message-read receipts, or cross-account replies. Keep deduplication and durable delivery intents in the application.
-
-## Bounded Feishu/Lark context reads (same Host)
-
-An active exclusive consumer may call the optional `dshIm.historyChecked(botId, source.reply, query, {expectedFingerprint, signal})`. Check `history-text-checked`, and also `thread-history-text-checked` for a thread. Query is `{scope: 'group' | 'nearby' | 'thread', limit: 1..20, cursor?: string}`. There is no browser/HTTP history endpoint. The verified account and live consumer lease are required; standalone accounts cannot read through this contract.
-
-Each call re-fetches the source and compares its author, chat, thread, root and parent IDs before listing. `group` lists the source chat; `nearby` uses a bounded five-minute-before/after chat time window, not a native around-message API; `thread` lists the native thread. The response is `{version:1, scope, events, omitted, hasMore, nextCursor?, window?, coverage:'provider-visible-human-text'}`. At most `limit` provider records are inspected; unsupported, deleted, application-sent or invalid text is counted as omitted. Pagination is explicit, one page per call. The caller binds its continuation to the same source/query. History-derived events use `history:<messageId>` as event ID; deduplicate with the native message ID alongside received events.
-
-Only visible Human text is returned, with the same normalized event shape. Optional platform `sender_name` and mention `name` are display labels, never identity or authorization; missing names remain absent. No directory lookup or Human token fallback is performed. A read does not admit ordinary messages to an Inbox, wake an agent, reply, mark a message read, or synchronize withdrawal. The companion application owns those decisions and canonical persistence.
-
-Missing Bot permissions return `history-permission-denied`; missing/changed source IDs return `stale-route`; an anchor without a thread returns `thread-unavailable`; provider failures or malformed pagination return `history-unavailable`. Unrelated chat/thread records fail with `untrusted-source`. Caller cancellation, consumer release, Host close and Provider replacement discard in-flight results. The consumer must retain its lifetime until the read completes. This capability is neither a complete transcript guarantee nor provider-wide search.
-
-```js
-const page = await ctx.dshIm.historyChecked(botId, event.reply,
-  { scope: 'thread', limit: 10 },
-  { expectedFingerprint: account.account.fingerprint, signal: lifecycleSignal });
-// Persist/reconcile only after application authorization. Do not turn reads into intake.
-```
+A successful test only proves the platform API accepted the send. Check bot permissions, platform limits, whether the target is correct, and any client-side message filtering or archiving.

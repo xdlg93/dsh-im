@@ -12,8 +12,7 @@ import {
  * explicit: a subclass reads and writes them through extensionState().
  */
 const EXTENSION_KEYS = Object.freeze([
-  'emailBindings', 'mailCursor', 'pendingAuth', 'threadIds', 'rootAnchors',
-  'whatsappBotMessageIds',
+  'rootAnchors',
 ]);
 
 const PENDING_MESSAGE_LIMIT = 200;
@@ -59,10 +58,8 @@ const EMPTY_STATE = Object.freeze({ version: 1, sessions: {}, seenMessageIds: []
  * before its turn runs can replay it (submitted: false) or report it
  * (submitted: true, meaning the Harness inbox already owns it).
  *
- * Wired today by TextHarnessBridge (telegram, slack, discord, matrix,
- * whatsapp, email, imessage) and QqHarnessBridge. The channels that run their
- * own queue path (weixin, dingtalk, wecom, wecom-app, feishu) still need the
- * same treatment.
+ * Wired today by QqHarnessBridge; a channel that runs its own queue path still
+ * needs the same treatment.
  */
 function validPendingMessage(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -276,7 +273,7 @@ export class ConversationStateStore {
    * `markSeen` means "this message was handled". A turn that failed before
    * producing anything is not handled, so keeping the mark makes the id a
    * permanent tombstone: every later poll short-circuits on `hasSeen` and the
-   * mail is never retried. The bridge calls this to separate "attempted" from
+   * message is never retried. The bridge calls this to separate "attempted" from
    * "done". A message that already succeeded is never unmarked.
    */
   async unmarkSeen(messageId) {

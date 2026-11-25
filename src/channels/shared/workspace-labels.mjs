@@ -2,15 +2,15 @@
  * Shared display labels for workspace pickers.
  *
  * Paths and their snapshot order stay the callback identity; only the visible
- * text is derived here. Every channel that offers a workspace selector (Feishu
- * cards, Telegram inline keyboards, …) must use the same rules so the same
- * workspace reads the same way everywhere:
+ * text is derived here. Every surface that offers a workspace selector (text
+ * commands, inline keyboards, …) must use the same rules so the same workspace
+ * reads the same way everywhere:
  *
  *   - a usable title wins, otherwise the folder name
  *   - colliding labels grow a parent-folder suffix until unique or rooted
  *   - overlong labels keep the head and tail with an ellipsis in the middle
  *
- * The rules originate from the Feishu workspace-list card (issue #300).
+ * The rules originate from the workspace-list card shipped for issue #300.
  */
 
 import { posix, win32 } from 'node:path';

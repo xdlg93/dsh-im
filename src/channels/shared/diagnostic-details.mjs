@@ -1,6 +1,6 @@
 // Shared by Host and Client: only explicitly admitted diagnostic facts cross the UI boundary.
 const OPERATIONS = new Set([
-  'bot.bind-credentials', 'bot.bind-native', 'bot.bind-mailbox', 'bot.mailbox.update', 'bot.auth.start', 'bot.auth.poll',
+  'bot.bind-credentials', 'bot.auth.start', 'bot.auth.poll',
   'permissions.status', 'bot.session-binding.get', 'bot.session-binding.set', 'bot.session.list', 'connection.test', 'message.receive', 'message.send',
   'connector.configure', 'connector.reconnect', 'connector.test', 'connector.remove', 'startup', 'connection.restore', 'connection.monitor', 'connection.close', 'connection.status',
   'provision.begin', 'provision.poll', 'provision.verify', 'provision.cancel', 'bot.reconnect', 'bot.delete',
@@ -114,10 +114,12 @@ export function normalizeDiagnosticDetails(value) {
   if (Number.isSafeInteger(value.attempts) && value.attempts >= 0) result.attempts = value.attempts;
   for (const field of ['nodeVersion', 'dshVersion']) if (typeof value[field] === 'string' && /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(value[field]) && value[field].length < 80) result[field] = value[field];
   if (['darwin', 'linux', 'win32', 'freebsd'].includes(value.platform)) result.platform = value.platform;
-  if (['ilinkai.weixin.qq.com', 'oapi.dingtalk.com', 'api.dingtalk.com', 'api.telegram.org', 'discord.com', 'slack.com', 'open.feishu.cn', 'qyapi.weixin.qq.com'].includes(value.host)) result.host = value.host;
+  // Only the two backends this fork actually talks to; anything else is dropped
+  // so a diagnostic can never echo an arbitrary host back to the reader.
+  if (DIAGNOSTIC_HOSTS.has(value.host)) result.host = value.host;
   if (value.dependencies && typeof value.dependencies === 'object') {
     const dependencies = {};
-    for (const name of ['dingtalkStream', 'axios', 'httpsProxyAgent', 'agentBase', 'qrcode', 'pngjs', 'zlib']) {
+    for (const name of ['axios', 'httpsProxyAgent', 'agentBase', 'qrcode', 'pngjs', 'zlib']) {
       const version = value.dependencies[name];
       if (typeof version === 'string' && /^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version) && version.length <= 80) dependencies[name] = version;
     }
@@ -128,7 +130,9 @@ export function normalizeDiagnosticDetails(value) {
   if (CONFIG_FILES.has(value.file)) result.file = value.file;
   if (typeof value.field === 'string' && CONFIG_FIELD.test(value.field)) result.field = value.field;
   if (typeof value.issue === 'string' && Object.hasOwn(CONFIG_ISSUE_LABELS, value.issue)) result.issue = value.issue;
-  if (/^(?:(?:WX|DT|IM)-CONN|MF)-[A-F0-9]{8}$/.test(value.referenceId ?? '')) result.referenceId = value.referenceId;
+  // WX-/IM-CONN- come from connection diagnostics; MF- is the shared message-failure
+  // reference every channel emits, so it must survive normalization too.
+  if (/^(?:(?:WX|IM)-CONN|MF)-[A-F0-9]{8}$/.test(value.referenceId ?? '')) result.referenceId = value.referenceId;
   if (typeof value.occurredAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.occurredAt)
     && Number.isFinite(Date.parse(value.occurredAt))) result.occurredAt = value.occurredAt;
   if (Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599) result.httpStatus = value.httpStatus;
@@ -146,7 +150,10 @@ export function normalizeDiagnosticDetails(value) {
   return result;
 }
 
-export const DIAGNOSTIC_CHANNELS = Object.freeze(['weixin', 'feishu', 'dingtalk', 'wecom', 'qq', 'slack', 'telegram', 'discord', 'whatsapp', 'wecom-app', 'imessage', 'email', 'office']);
+export const DIAGNOSTIC_CHANNELS = Object.freeze(['weixin', 'qq']);
+
+/** Backend hosts worth naming in a diagnostic: WeChat iLink and the QQ bot API. */
+const DIAGNOSTIC_HOSTS = new Set(['ilinkai.weixin.qq.com', 'api.sgroup.qq.com']);
 
 export function diagnosticFields(value) {
   if (!value?.details) return {};

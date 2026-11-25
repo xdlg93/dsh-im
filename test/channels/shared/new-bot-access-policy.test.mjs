@@ -8,7 +8,7 @@ import { initialAccessPolicyFor } from '../../../plugin-src/host/channels/shared
 import { createAccessPolicy, createAccessPolicyScope } from '../../../src/channels/shared/access-policy.mjs';
 import { evaluateInboundAccess } from '../../../src/channels/shared/inbound-access.mjs';
 
-for (const channel of ['feishu', 'qq']) {
+for (const channel of ['qq']) {
   test(`${channel} opens new bot messages and commands while preserving saved policies and legacy migration`, async (t) => {
     const dataDir = await mkdtemp(join(tmpdir(), `dsh-new-access-${channel}-`));
     t.after(() => rm(dataDir, { recursive: true, force: true }));
@@ -126,3 +126,50 @@ for (const channel of ['feishu', 'qq']) {
     assert.deepEqual(persisted.chat_only, chatOnly);
   });
 }
+
+// Weixin keeps its own new-bot default: an allowlist scoped to the owner, so an
+// unknown sender is refused until the operator opens the bot.
+test('weixin seeds a new bot with the owner allowlist and keeps it across a restart', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'dsh-new-access-weixin-'));
+  t.after(() => rm(dataDir, { recursive: true, force: true }));
+  const bots = [{ id: 'wx', botId: 'wx', accountId: 'account@im.bot', ownerUserId: 'owner' }];
+  class ConfigStore {
+    async load() { return this; }
+    list() { return bots; }
+    getBot(id) { return bots.find((config) => config.id === id); }
+  }
+  class StateStore { async load() { return this; } }
+  class Harness { stopManagedProcess() {} }
+  class Runtime { constructor(options) { runtimeOptions = options; } }
+  let runtimeOptions;
+  class Controller {
+    constructor(options) { controllerOptions = options; }
+    status() { return { bots: bots.map(({ botId }) => ({ botId, configured: true })) }; }
+    async close() {}
+  }
+  let controllerOptions;
+  const { createProductionController } = await import('../../../plugin-src/host/channels/weixin/production.mjs');
+  const production = await createProductionController({
+    credentials: {}, typertGateway: { invoke() {}, stream() {} },
+    logger: () => ({ error() {}, warn() {}, info() {}, debug() {} }),
+  }, { dataDir, workspace: dataDir }, {
+    ConfigStore, StateStore, HarnessClient: Harness, Controller, Runtime,
+    api: { beginLogin() {}, pollLogin() {} },
+    createConnectionSupervisor: () => ({
+      ready: Promise.resolve(), start() { return this; }, async close() {},
+    }),
+  });
+  t.after(() => production.close());
+  await controllerOptions.createRuntime({ botId: 'wx', config: bots[0] });
+  const policy = runtimeOptions.accessPolicy.getSettings();
+  assert.deepEqual(policy, initialAccessPolicyFor('weixin', bots[0]));
+  for (const conversationType of ['direct', 'group']) {
+    assert.equal(policy[conversationType].mode, 'allowlist');
+    assert.equal(evaluateInboundAccess(runtimeOptions.accessPolicy, {
+      conversationType, senderIds: 'other', text: 'hello',
+    }).allowed, false);
+  }
+  assert.equal(evaluateInboundAccess(runtimeOptions.accessPolicy, {
+    conversationType: 'direct', senderIds: 'owner', text: '/status',
+  }).reason, 'privileged-sender');
+});

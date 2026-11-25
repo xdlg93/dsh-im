@@ -8,8 +8,8 @@ import { getDeliverySyncSettingsStore } from '../../src/channels/shared/delivery
 /**
  * Which synced chats of one channel currently mirror `sessionId`.
  *
- * This is the channel's own view of its targets — the Feishu bridge asks it
- * before it draws a process card — and it therefore has to honour the same
+ * This is the channel's own view of its targets — a channel asks it before it
+ * draws a process card — and it therefore has to honour the same
  * delivery switches as the coordinator's target path. Both consult
  * `deliverySwitchesOff`, so "both switches off" silences the card and the text
  * together instead of leaving one of the two paths alive.

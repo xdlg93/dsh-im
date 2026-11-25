@@ -5,12 +5,12 @@ import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const PACKAGE_NAME = '@xmanrui/dsh-im';
-const DEFAULT_SOURCE = 'github:xmanrui/dsh-im';
+const PACKAGE_NAME = '@xdlg93/dsh-im';
+const DEFAULT_SOURCE = 'github:xdlg93/dsh-im';
+// Predecessor packages this fork supersedes. Only the WeChat one can still be
+// present: the Feishu/DingTalk channels are not part of this fork.
 const LEGACY_PACKAGES = [
-  '@xmanrui/dsh-feishu',
   '@xmanrui/dsh-weixin',
-  '@xmanrui/dsh-dingtalk',
 ];
 
 function usage() {
@@ -19,7 +19,7 @@ function usage() {
   dsh-im uninstall [--profile web]
 
 Examples:
-  npx -y github:xmanrui/dsh-im install
+  npx -y github:xdlg93/dsh-im install
   dsh-im install --source .`);
 }
 

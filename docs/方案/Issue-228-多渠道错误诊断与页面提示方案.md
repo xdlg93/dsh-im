@@ -1,5 +1,7 @@
 # Issue #228：多渠道错误原因提取与页面提示方案
 
+> **归档说明**：本文是上游 dsh-im 5.10.0 的设计记录，写作时项目支持多个 IM 渠道。本 fork 只保留微信与 QQ 两个扫码通道，文中其他渠道的内容仅作历史参考，不代表当前版本的功能。
+
 日期：2026-09-20。状态：待实施；本文是方案，不代表代码已修改或现场网络故障已解决。
 
 关联反馈：[Issue #228](https://github.com/xmanrui/dsh-im/issues/228)。范围依据当前设置页中的 13 个接入入口，包含实验功能和邮箱。
@@ -256,7 +258,7 @@ Client 的 `wecomApp` 与 Host 的 `wecom-app` 在边界做一次名称映射，
 - [微信原因提取与日志](../../src/channels/weixin/connection-error.mjs)
 - [微信详情字段](../../src/channels/weixin/diagnostic-details.mjs)
 - [微信详情与复制组件](../../plugin-src/client/channels/weixin/connection-error.js)
-- [钉钉连接分类](../../src/channels/dingtalk/connection-error.mjs)
+- 钉钉连接分类
 - [共享管理 RPC](../../plugin-src/host/channels/shared/rpc.mjs)
 - [共享 Client API](../../plugin-src/client/channels/shared/token-api.js)
 - [既有消息失败机制](../../src/channels/shared/message-failure.mjs)

@@ -4,17 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { DingtalkStateStore } from '../src/channels/dingtalk/state-store.mjs';
-import { DiscordStateStore } from '../src/channels/discord/state-store.mjs';
-import { normalizeEmail } from '../src/channels/email/email-runtime.mjs';
-import { StateStore as FeishuStateStore } from '../src/channels/feishu/state-store.mjs';
 import { QqStateStore } from '../src/channels/qq/state-store.mjs';
-import { SlackStateStore } from '../src/channels/slack/state-store.mjs';
-import { TelegramStateStore } from '../src/channels/telegram/state-store.mjs';
-import { WecomStateStore } from '../src/channels/wecom/state-store.mjs';
-import { WecomAppStateStore } from '../src/channels/wecom-app/state-store.mjs';
 import { WeixinStateStore } from '../src/channels/weixin/state-store.mjs';
-import { WhatsappStateStore } from '../src/channels/whatsapp/state-store.mjs';
 import {
   createDeliveryAdapter,
   normalizeDeliveryTarget,
@@ -26,72 +17,18 @@ import {
 
 const TARGETS = {
   weixin: { targetId: 'daily', kind: 'user', route: { toUserId: 'wx-user' } },
-  feishu: { targetId: 'daily', kind: 'group', route: { chatId: 'oc_group' } },
-  dingtalk: {
-    targetId: 'daily', kind: 'group', route: { openConversationId: 'cid_group' },
-  },
-  wecom: { targetId: 'daily', kind: 'user', route: { chatId: 'wecom-user' } },
-  'wecom-app': { targetId: 'daily', kind: 'user', route: { chatId: 'wecomapp-user' } },
   qq: { targetId: 'daily', kind: 'group', route: { groupOpenId: 'qq-group' } },
-  slack: {
-    targetId: 'daily', kind: 'thread', route: { channelId: 'C123', threadTs: '123.456' },
-  },
-  telegram: {
-    targetId: 'daily', kind: 'topic', route: { chatId: '-100123', messageThreadId: 42 },
-  },
-  discord: { targetId: 'daily', kind: 'channel', route: { channelId: '123456789' } },
-  whatsapp: {
-    targetId: 'daily', kind: 'group', route: { jid: '123456789-120363000000000000@g.us' },
-  },
 };
 
 const STATE_STORES = {
   weixin: WeixinStateStore,
-  feishu: FeishuStateStore,
-  dingtalk: DingtalkStateStore,
-  wecom: WecomStateStore,
-  'wecom-app': WecomAppStateStore,
   qq: QqStateStore,
-  slack: SlackStateStore,
-  telegram: TelegramStateStore,
-  discord: DiscordStateStore,
-  whatsapp: WhatsappStateStore,
 };
 
 const SESSION_SUGGESTIONS = {
-  matrix: { sessions: { 'direct:dm:@alice:example.org': 'session-matrix' }, suggestions: [{ kind: 'dm', route: { userId: '@alice:example.org' } }] },
   weixin: {
     sessions: { 'p2p:wx-user': 'session-weixin', 'group:ignored': 'session-ignored' },
     suggestions: [{ kind: 'user', route: { toUserId: 'wx-user' } }],
-  },
-  feishu: {
-    sessions: {
-      'p2p:ou_user': 'session-user',
-      'p2p:legacy-user-id': 'session-without-open-id',
-      'group:oc_group': 'session-group',
-    },
-    suggestions: [
-      { kind: 'user', route: { openId: 'ou_user' } },
-      { kind: 'group', route: { chatId: 'oc_group' } },
-    ],
-  },
-  dingtalk: {
-    sessions: { 'p2p:staff-one': 'session-user', 'group:cid_group': 'session-group' },
-    suggestions: [
-      { kind: 'user', route: { userId: 'staff-one' } },
-      { kind: 'group', route: { openConversationId: 'cid_group' } },
-    ],
-  },
-  wecom: {
-    sessions: { 'direct:member-one': 'session-user', 'group:wr_group': 'session-group' },
-    suggestions: [
-      { kind: 'user', route: { chatId: 'member-one' } },
-      { kind: 'group', route: { chatId: 'wr_group' } },
-    ],
-  },
-  'wecom-app': {
-    sessions: { 'p2p:wecomapp-user': 'session-user' },
-    suggestions: [{ kind: 'user', route: { chatId: 'wecomapp-user' } }],
   },
   qq: {
     sessions: { 'c2c:user-openid': 'session-user', 'group:group-openid': 'session-group' },
@@ -100,69 +37,14 @@ const SESSION_SUGGESTIONS = {
       { kind: 'group', route: { groupOpenId: 'group-openid' } },
     ],
   },
-  slack: {
-    sessions: {
-      'direct:D123456': 'session-direct',
-      'group:C123456:1712345678.123456': 'session-thread',
-    },
-    suggestions: [
-      { kind: 'conversation', route: { channelId: 'D123456' } },
-      { kind: 'thread', route: { channelId: 'C123456', threadTs: '1712345678.123456' } },
-    ],
-  },
-  telegram: {
-    sessions: {
-      'direct:88': 'session-direct',
-      'group:-1001234567890:42': 'session-topic',
-    },
-    suggestions: [
-      { kind: 'chat', route: { chatId: '88' } },
-      { kind: 'topic', route: { chatId: '-1001234567890', messageThreadId: 42 } },
-    ],
-  },
-  discord: {
-    sessions: {
-      'direct:123456789012345678': 'session-direct',
-      'group:223456789012345678': 'session-thread',
-    },
-    suggestions: [
-      { kind: 'channel', route: { channelId: '123456789012345678' } },
-      { kind: 'channel', route: { channelId: '223456789012345678' } },
-    ],
-  },
-  whatsapp: {
-    sessions: {
-      'direct:16505550123@s.whatsapp.net': 'session-user',
-      'group:120363000000000000@g.us': 'session-group',
-      'group:123456789-120363000000000001@g.us': 'session-legacy-group',
-    },
-    suggestions: [
-      { kind: 'user', route: { jid: '16505550123@s.whatsapp.net' } },
-      { kind: 'group', route: { jid: '120363000000000000@g.us' } },
-      { kind: 'group', route: { jid: '123456789-120363000000000001@g.us' } },
-    ],
-  },
 };
 
 const PRIVATE_TARGETS = {
-  matrix: { targetId: 'private', kind: 'dm', route: { userId: '@alice:example.org' } },
   weixin: { targetId: 'private', kind: 'user', route: { toUserId: 'wx-user' } },
-  feishu: { targetId: 'private', kind: 'user', route: { openId: 'ou_user' } },
-  dingtalk: { targetId: 'private', kind: 'user', route: { userId: 'staff-one' } },
-  wecom: { targetId: 'private', kind: 'user', route: { chatId: 'member-one' } },
-  'wecom-app': { targetId: 'private', kind: 'user', route: { chatId: 'wecomapp-user' } },
   qq: { targetId: 'private', kind: 'user', route: { userOpenId: 'user-openid' } },
-  slack: { targetId: 'private', kind: 'conversation', route: { channelId: 'D123456' } },
-  telegram: { targetId: 'private', kind: 'chat', route: { chatId: '88' } },
-  discord: {
-    targetId: 'private', kind: 'channel', route: { channelId: '123456789012345678' },
-  },
-  whatsapp: {
-    targetId: 'private', kind: 'user', route: { jid: '16505550123@s.whatsapp.net' },
-  },
 };
 
-test('all ten delivery adapters validate and forward one stable target', async () => {
+test('every delivery adapter validates and forwards one stable target', async () => {
   for (const [channel, target] of Object.entries(TARGETS)) {
     const calls = [];
     const workspaces = {
@@ -198,79 +80,6 @@ test('all ten delivery adapters validate and forward one stable target', async (
       'send', `bot-${channel}`, target, 'hello', { signal: undefined },
     ]);
   }
-});
-
-test('email Message-IDs and bound sessions never become delivery recipients', async () => {
-  const sessions = {};
-  for (const messageId of [
-    '<m1@mail.example>',
-    '<tencent_0123456789abcdef0123456789abcdef@qq.com>',
-  ]) {
-    const message = normalizeEmail({
-      messageId,
-      from: { value: [{ address: 'user@example.com' }] },
-      text: 'Hello',
-    });
-    assert.equal(message.replyTarget.to, 'user@example.com');
-    assert.equal(message.conversationId, messageId);
-    sessions[`${message.kind}:${message.conversationId}`] = 'session-email';
-  }
-  // Neither unwrapped identifiers nor fixed bindings identify a recipient.
-  sessions['direct:m1@mail.example'] = 'session-unwrapped';
-  sessions['direct:bound:session-fixed'] = 'session-fixed';
-  const adapter = createDeliveryAdapter({
-    channel: 'email',
-    workspaces: { dsBotConversationKeys: () => [] },
-    coreController: {},
-    stateFor: async () => ({ snapshot: () => ({ sessions }) }),
-  });
-
-  assert.deepEqual(await adapter.listSuggestions('bot-email'), []);
-  assert.deepEqual(await adapter.listDsBotConversations('bot-email'), []);
-  for (const key of Object.keys(sessions)) {
-    assert.equal(privateDeliverySuggestionFromConversationKey('email', key), null, key);
-  }
-});
-
-test('email delivery creates and sends explicit recipients without inferring Session sync', async () => {
-  const botId = 'bot-email';
-  const calls = [];
-  let saved;
-  const adapter = createDeliveryAdapter({
-    channel: 'email',
-    workspaces: {
-      createDeliveryTarget: async (id, target) => {
-        assert.equal(id, botId);
-        saved = target;
-        return target;
-      },
-      listDeliveryTargets: () => [saved],
-      deliveryTargetFor: () => saved,
-      setDeliveryTargetSessionSync: () => assert.fail('Email has no recipient-to-session mapping'),
-    },
-    coreController: {
-      async sendProactiveText(...args) { calls.push(args); },
-    },
-    stateFor: async () => ({ snapshot: () => ({
-      sessions: { 'direct:<user@example.com>': 'message-id-session' },
-    }) }),
-  });
-  const target = await adapter.createTarget(botId, {
-    targetId: 'recipient', kind: 'user', route: { address: 'User@Example.COM' },
-  });
-  assert.deepEqual(target, {
-    targetId: 'recipient', kind: 'user', route: { address: 'user@example.com' },
-  });
-  const [listed] = await adapter.listTargets(botId);
-  assert.deepEqual(listed.sessionSync, { enabled: false, state: 'unavailable' });
-  await assert.rejects(adapter.setSessionSync(botId, target.targetId, true), {
-    code: 'session-sync-unavailable',
-  });
-  assert.deepEqual(await adapter.sendText(botId, listed, 'hello'), { sent: true });
-  assert.deepEqual(calls, [[botId, target, 'hello', {}]]);
-  assert.throws(() => adapter.createTarget(botId, {
-    targetId: 'invalid', kind: 'user', route: { address: '<m1@mail.example>' },
-  }), { code: 'invalid-target' });
 });
 
 test('all adapters enable, resolve, and revalidate one private Session target', async () => {
@@ -374,27 +183,27 @@ test('delivery adapter delegates target CRUD to the existing workspace store', a
     deleteDeliveryTarget: async (...args) => calls.push(['delete', ...args]),
   };
   const adapter = createDeliveryAdapter({
-    channel: 'feishu',
+    channel: 'qq',
     workspaces,
     coreController: { sendProactiveText() {} },
     stateFor: async () => ({ snapshot: () => ({ sessions: {} }) }),
   });
   const target = {
-    targetId: 'ops', name: '  Ops  ', kind: 'user', route: { openId: 'ou_ops' },
+    targetId: 'ops', name: '  Ops  ', kind: 'user', route: { userOpenId: 'qq_ops' },
   };
 
   await adapter.createTarget('bot-one', target);
   await adapter.updateTarget('bot-one', 'ops', {
-    name: 'On call', kind: 'group', route: { chatId: 'oc_oncall' },
+    name: 'On call', kind: 'group', route: { groupOpenId: 'qq_oncall' },
   });
   await adapter.deleteTarget('bot-one', 'ops');
 
   assert.deepEqual(calls, [
     ['create', 'bot-one', {
-      targetId: 'ops', name: 'Ops', kind: 'user', route: { openId: 'ou_ops' },
+      targetId: 'ops', name: 'Ops', kind: 'user', route: { userOpenId: 'qq_ops' },
     }],
     ['update', 'bot-one', 'ops', {
-      name: 'On call', kind: 'group', route: { chatId: 'oc_oncall' },
+      name: 'On call', kind: 'group', route: { groupOpenId: 'qq_oncall' },
     }],
     ['delete', 'bot-one', 'ops'],
   ]);
@@ -402,29 +211,28 @@ test('delivery adapter delegates target CRUD to the existing workspace store', a
 
 test('suggestion parser strictly filters malformed keys, de-duplicates routes, and never leaks state values', () => {
   const sessions = {
-    'direct:88': 'secret-session-one',
-    'group:88': { sessionId: 'secret-session-two', replyToMessageId: 7 },
-    'group:-100:42': 'secret-topic-session',
-    'direct:88:7': 'transient-reply-key',
-    'group:-100:0': 'invalid-topic',
-    'group:not-a-number': 'invalid-chat',
+    'c2c:user-openid': 'secret-session-one',
+    'group:group-openid': { sessionId: 'secret-session-two' },
+    'c2c:user-openid:7': 'transient-reply-key',
+    'c2c:': 'empty-identity',
+    'group:has space': 'invalid-identity',
     'other:88': 'wrong-prefix',
   };
-  const suggestions = deliverySuggestionsFromSessions('telegram', sessions);
+  const suggestions = deliverySuggestionsFromSessions('qq', sessions);
   assert.deepEqual(suggestions, [
-    { kind: 'chat', route: { chatId: '88' } },
-    { kind: 'topic', route: { chatId: '-100', messageThreadId: 42 } },
+    { kind: 'user', route: { userOpenId: 'user-openid' } },
+    { kind: 'group', route: { groupOpenId: 'group-openid' } },
   ]);
   assert.deepEqual(
     suggestions.map((suggestion) => Object.keys(suggestion)),
     [['kind', 'route'], ['kind', 'route']],
   );
   assert.doesNotMatch(JSON.stringify(suggestions), /session|reply|secret/i);
-  assert.deepEqual(deliverySuggestionsFromSessions('telegram', null), []);
+  assert.deepEqual(deliverySuggestionsFromSessions('qq', null), []);
   assert.deepEqual(deliverySuggestionsFromSessions('unknown', sessions), []);
 });
 
-test('all ten adapters list suggestions from reloaded bot state while no runtime is connected', async (t) => {
+test('every adapter lists suggestions from reloaded bot state while no runtime is connected', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-delivery-suggestions-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   for (const [channel, StateStore] of Object.entries(STATE_STORES)) {
@@ -473,38 +281,37 @@ test('channel-specific route kinds stay strict', () => {
     (error) => error?.code === 'invalid-target',
   );
   assert.throws(
-    () => normalizeDeliveryTarget('telegram', {
-      targetId: 'topic', kind: 'topic', route: { chatId: '-100', messageThreadId: '42' },
+    () => normalizeDeliveryTarget('qq', {
+      targetId: 'group', kind: 'group', route: { groupOpenId: ' qq-group' },
     }),
     (error) => error?.code === 'invalid-target',
   );
   assert.throws(
-    () => normalizeDeliveryTarget('whatsapp', {
-      targetId: 'broadcast', kind: 'group', route: { jid: 'status@broadcast' },
+    () => normalizeDeliveryTarget('qq', {
+      targetId: 'group', kind: 'group', route: { userOpenId: 'qq-user' },
     }),
     (error) => error?.code === 'invalid-target',
   );
 });
 
 /**
- * A Telegram forum topic is a shared room: mirrored text belongs there, but a
- * question or an approval would be answerable by any member, so both stay in
- * private chat.
+ * A group chat is a shared room: mirrored text belongs there, but a question or
+ * an approval would be answerable by any member, so both stay in private chat.
  */
-function topicAdapter() {
+function groupAdapter() {
   const target = {
-    targetId: 'topic', name: 'Daily topic', kind: 'topic',
-    route: { chatId: '-1001234567890', messageThreadId: 42 },
+    targetId: 'group', name: 'Daily group', kind: 'group',
+    route: { groupOpenId: 'qq-group' },
   };
-  const sessions = { 'group:-1001234567890:42': 'session-topic' };
+  const sessions = { 'group:qq-group': 'session-group' };
   const state = { syncKey: null, sends: [], interactions: [] };
   const workspaces = {
     has: () => true,
-    listBotIds: () => ['bot-telegram'],
+    listBotIds: () => ['bot-qq'],
     listDeliveryTargets: () => [structuredClone(target)],
     deliveryTargetFor: (_botId, targetId) => (targetId === target.targetId ? structuredClone(target) : null),
     listSessionSyncTargets: () => (state.syncKey
-      ? [{ botId: 'bot-telegram', targetId: target.targetId, conversationKey: state.syncKey }]
+      ? [{ botId: 'bot-qq', targetId: target.targetId, conversationKey: state.syncKey }]
       : []),
     async setDeliveryTargetSessionSync(_botId, _targetId, value) { state.syncKey = value; },
     createDeliveryTarget() {},
@@ -512,7 +319,7 @@ function topicAdapter() {
     deleteDeliveryTarget() {},
   };
   const adapter = createDeliveryAdapter({
-    channel: 'telegram',
+    channel: 'qq',
     workspaces,
     coreController: {
       async sendProactiveText(...args) { state.sends.push(args); },
@@ -524,46 +331,46 @@ function topicAdapter() {
   return { adapter, target, state };
 }
 
-test('a Telegram forum topic receives mirrored text and never a question or approval', async () => {
-  const { adapter, target, state } = topicAdapter();
+test('a QQ group receives mirrored text and never a question or approval', async () => {
+  const { adapter, target, state } = groupAdapter();
 
-  assert.deepEqual((await adapter.listTargets('bot-telegram'))[0].sessionSync, {
+  assert.deepEqual((await adapter.listTargets('bot-qq'))[0].sessionSync, {
     enabled: false, state: 'off',
   });
-  assert.deepEqual(await adapter.setSessionSync('bot-telegram', target.targetId, true), {
+  assert.deepEqual(await adapter.setSessionSync('bot-qq', target.targetId, true), {
     enabled: true, state: 'active',
   });
-  assert.equal(state.syncKey, 'group:-1001234567890:42');
+  assert.equal(state.syncKey, 'group:qq-group');
 
   // Text follows the group route the channel persisted.
   assert.deepEqual(
-    await adapter.sendSessionSyncText('bot-telegram', target.targetId, 'session-topic', 'answer'),
+    await adapter.sendSessionSyncText('bot-qq', target.targetId, 'session-group', 'answer'),
     { sent: true },
   );
-  assert.deepEqual(state.sends.at(-1), ['bot-telegram', { ...target, targetId: target.targetId }, 'answer', {}]);
+  assert.deepEqual(state.sends.at(-1), ['bot-qq', { ...target, targetId: target.targetId }, 'answer', {}]);
   await assert.rejects(
-    adapter.sendSessionSyncText('bot-telegram', target.targetId, 'another-session', 'answer'),
+    adapter.sendSessionSyncText('bot-qq', target.targetId, 'another-session', 'answer'),
     { code: 'session-sync-unavailable' },
   );
 
   // A group is not a candidate for a synced question or approval, and both
   // paths refuse it even when asked directly by target id.
-  assert.deepEqual(await adapter.listSessionSyncTargets('session-topic'), []);
+  assert.deepEqual(await adapter.listSessionSyncTargets('session-group'), []);
   const interaction = { respond: async () => {}, withdraw: async () => {} };
   for (const [method, describe] of [
     ['presentSessionSyncApproval', 'describeSessionSyncApprovalTarget'],
     ['presentSessionSyncQuestion', 'describeSessionSyncQuestionTarget'],
   ]) {
-    await assert.rejects(adapter[method]('bot-telegram', target.targetId, 'session-topic', interaction), {
+    await assert.rejects(adapter[method]('bot-qq', target.targetId, 'session-group', interaction), {
       code: 'session-sync-unavailable',
     }, method);
-    await assert.rejects(adapter[describe]('bot-telegram', target.targetId, 'session-topic'), {
+    await assert.rejects(adapter[describe]('bot-qq', target.targetId, 'session-group'), {
       code: 'session-sync-unavailable',
     }, describe);
   }
   assert.deepEqual(state.interactions, []);
 
-  assert.deepEqual((await adapter.listTargets('bot-telegram'))[0].sessionSync, {
+  assert.deepEqual((await adapter.listTargets('bot-qq'))[0].sessionSync, {
     enabled: true, state: 'active',
   });
 });

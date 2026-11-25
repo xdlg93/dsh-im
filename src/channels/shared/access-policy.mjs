@@ -160,7 +160,7 @@ const COMMAND_NOT_ALLOWED = Object.freeze({ allowed: false, reason: 'command-not
 
 /**
  * Decide access for one ordinary message or one already-recognized command.
- * `senderIds` accepts multiple identities so WhatsApp can reuse its JID aliases.
+ * `senderIds` accepts multiple identities so a channel can reuse its identity aliases.
  * Privileged/owner bypass is intentionally handled by the inbound adapter.
  */
 export function evaluateAccessPolicy(policy, {

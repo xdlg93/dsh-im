@@ -178,7 +178,7 @@ try {
   const packages = {
     '@deepseek-ai/dsh-base': resolve(harnessRoot, 'packages/bundle/base'),
     '@deepseek-ai/dsh-web-app': resolve(harnessRoot, 'packages/bundle/web-app'),
-    '@xmanrui/dsh-im': pluginRoot,
+    '@xdlg93/dsh-im': pluginRoot,
   };
   for (const [name, path] of Object.entries(packages)) {
     const target = join(profile, 'node_modules', name);
@@ -239,7 +239,7 @@ try {
     await rpc(await login(launchUrl, domain), 'dingtalk'), 403);
 
   await stop();
-  await writeFile(join(profile, 'cordis.patch.yml'), '- id: xmanrui-dsh-im\n  config:\n    rpcAuthority: trusted-host\n');
+  await writeFile(join(profile, 'cordis.patch.yml'), '- id: xdlg93-dsh-im\n  config:\n    rpcAuthority: trusted-host\n');
   const domainLaunchUrl = await start([lanIp, domain]);
   const trustedDomain = await login(domainLaunchUrl, domain);
   expectStatus('Trusted domain without login rejected',
@@ -256,7 +256,7 @@ try {
   await verifyDenied('Trusted management hosts still require matching Origin', trustedDomain, 403, { origin: otherTrustedOrigin.origin });
 
   await stop();
-  await writeFile(join(profile, 'cordis.patch.yml'), '- id: xmanrui-dsh-im\n  config:\n    rpcAuthority: loopback\n');
+  await writeFile(join(profile, 'cordis.patch.yml'), '- id: xdlg93-dsh-im\n  config:\n    rpcAuthority: loopback\n');
   const restrictedUrl = await start();
   expectStatus('Explicit loopback rejects LAN', await rpc(await login(restrictedUrl, lanIp)), 403);
   await verifyDenied('Explicit loopback management rejects LAN', await login(restrictedUrl, lanIp), 403);

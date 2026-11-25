@@ -11,7 +11,7 @@ import { inboundImagesAsFiles, modelImageFromOriginal, imageContentFromStaged } 
 import { stageInboundFiles } from '../src/channels/shared/inbound-file.mjs';
 import { HarnessClient, HarnessRpcError } from '../src/channels/shared/harness-client.mjs';
 import { TextHarnessBridge } from '../src/channels/shared/text-harness-bridge.mjs';
-import { WecomAppBridge } from '../src/channels/wecom-app/wecom-app-bridge.mjs';
+import { QqHarnessBridge } from '../src/channels/qq/qq-bridge.mjs';
 import { createImageInputRpcHandler, IMAGE_INPUT_ENDPOINTS } from '../plugin-src/host/image-input-rpc.mjs';
 
 import { assertRestrictiveMode } from './support/filesystem.mjs';
@@ -248,27 +248,28 @@ for (const channel of ['slack', 'telegram', 'discord', 'whatsapp']) {
   });
 }
 
-test('WeCom app media downloads pass through real Harness staging and compression', async (t) => {
+test('QQ media downloads pass through real Harness staging and compression', async (t) => {
   const { root, client, prompts } = await clientFixture(t);
   const seen = new Set();
   const sent = [];
   const image = Buffer.concat([PNG, Buffer.alloc(6 * MB)]);
   let downloads = 0;
-  const bridge = new WecomAppBridge({
-    api: {
-      downloadMedia: async ({ mediaId }) => {
-        assert.equal(mediaId, 'media-image');
-        downloads++;
-        return { data: image, filename: 'big.png' };
-      },
-      sendText: async ({ content }) => { sent.push(content); return { message_id: 'out' }; },
-    },
+  const bridge = new QqHarnessBridge({
+    ownerUserOpenid: '*',
+    bot: { sendText: async (_target, text) => { sent.push(text); return { id: 'out' }; } },
     harness: client,
-    status: { messagesReceived: 0, messagesReplied: 0 },
     state: { sessionFor: () => 'test-session', hasSeen: (id) => seen.has(id), markSeen: async (id) => seen.add(id), setSession: async () => {} },
+    fetchImpl: async () => {
+      downloads++;
+      return new Response(image, { headers: { 'content-type': 'image/png' } });
+    },
   });
-  t.after(() => bridge.close());
-  await bridge.accept({ msgid: 'big-image', msgtype: 'image', from: { userid: 'user' }, mediaId: 'media-image' });
+  await bridge.accept({
+    kind: 'c2c', rawEventType: 'C2C_MESSAGE_CREATE', senderId: 'user', senderIsBot: false,
+    messageId: 'big-image', content: 'look',
+    replyTarget: { scope: 'c2c', targetId: 'user', msgId: 'big-image' },
+    attachments: [{ filename: 'big.png', url: 'https://gchat.qpic.cn/big.png', content_type: 'image/png' }],
+  });
   await bridge.waitForIdle();
   assert.deepEqual(sent, ['verified']);
   assert.equal(downloads, 1);

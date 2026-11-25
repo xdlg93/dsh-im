@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "IM bots (dsh-im)",
-    "description": "Connect Telegram, WhatsApp, Slack, Discord, Matrix, WeChat, Feishu, WeCom, DingTalk, and QQ to DSH."
+    "title": "IM bots (WeChat + QQ)",
+    "description": "Connect WeChat and QQ to DeepSeek Harness with QR-code login. Bind an account on the IM bots settings page, then chat with the bot, apply group and direct-message policies, enrich context, push proactive messages, and bind Sessions to workspaces."
   }
 }

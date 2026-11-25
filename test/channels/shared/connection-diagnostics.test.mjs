@@ -7,7 +7,6 @@ import { atConnectionStage, connectionErrorChain, connectionStageError, createCo
 import { normalizeDiagnosticDetails, DIAGNOSTIC_CHANNELS } from '../../../src/channels/shared/diagnostic-details.mjs';
 import { ConnectionError, formatConnectionDiagnostic } from '../../../plugin-src/client/connection-error.js';
 import { TokenBotController } from '../../../src/channels/shared/token-bot-controller.mjs';
-import { RegistrationManager } from '../../../src/channels/feishu/registration-manager.mjs';
 import { publicConnectionTestResult } from '../../../src/channels/shared/connection-test.mjs';
 import { classifyMessageFailure, publicMessageFailure } from '../../../src/channels/shared/message-failure.mjs';
 import { callManagementRpc } from '../../../plugin-src/management-rpc.mjs';
@@ -40,14 +39,14 @@ test('extracts deep and aggregate causes, bounds cycles and ignores arbitrary SD
 test('keeps valid HTTP evidence, stages and timings without diagnosing login expiry from a status', async () => {
   const { diagnostics, logs } = fixture();
   let error;
-  try { await atConnectionStage('credential.read', async () => { throw Object.assign(cause('EACCES'), { status: 403, durationMs: 125.4, timeoutMs: 5000, host: 'api.telegram.org' }); }, 'credential-store'); }
+  try { await atConnectionStage('credential.read', async () => { throw Object.assign(cause('EACCES'), { status: 403, durationMs: 125.4, timeoutMs: 5000, host: 'ilinkai.weixin.qq.com' }); }, 'credential-store'); }
   catch (caught) { error = caught; }
   const result = diagnostics.report(error, { operation: 'bot.reconnect' }).publicError;
   assert.equal(result.details.stage, 'credential.read');
   assert.equal(result.details.durationMs, 125);
   assert.equal(result.details.httpStatus, 403);
   assert.equal(result.details.resource, 'credential-store');
-  assert.equal(result.details.host, 'api.telegram.org');
+  assert.equal(result.details.host, 'ilinkai.weixin.qq.com');
   assert.doesNotMatch(JSON.stringify([result, logs]), /private-token|password|secret=/);
   const http = diagnostics.report(Object.assign(new Error(), { status: 401 })).publicError;
   assert.match(http.details.hint, /不能确认登录失效/);
@@ -122,12 +121,12 @@ for (const channel of DIAGNOSTIC_CHANNELS) {
 }
 
 function tokenControllerFixture() {
-  const fx = fixture('telegram');
+  const fx = fixture('qq');
   const configs = new Map([['one', { botId: 'one', platformId: '123', tokenRef: 'ref', name: 'Bot' }], ['two', { botId: 'two', platformId: '456', tokenRef: 'ref2', name: 'Bot 2' }]]);
   const credentials = { resolve: async ref => { if (ref === 'ref') throw cause('EACCES'); return { value: 'token' }; }, set: async () => {}, unset: async () => {} };
   const runtimes = [];
   const configStore = { list: () => [...configs.values()], get: id => configs.get(id), save: async config => configs.set(config.botId, config), remove: async id => configs.delete(id) };
-  const controller = new TokenBotController({ descriptor: { key: 'telegram', label: 'Telegram', connectionLabel: 'Polling' }, credentials,
+  const controller = new TokenBotController({ descriptor: { key: 'qq', label: 'QQ', connectionLabel: 'Polling' }, credentials,
     configStore,
     inspectToken: async () => ({}), deriveIdentity: () => ({}), maskPlatformId: () => '***', logger: fx.logger,
     createRuntime: async () => { const runtime = { status: { ready: true, connectionState: 'connected', harnessReachable: true }, start: async () => {}, stop: async () => {} }; runtimes.push(runtime); return runtime; },
@@ -174,20 +173,6 @@ test('credential read failure remains per account; another account restores and 
   assert.equal(removed.warnings[0].details.reason, 'EPERM');
 });
 
-test('background Feishu QR failures retain a log reference and cancellation stays quiet', async () => {
-  const fx = fixture('feishu');
-  const manager = new RegistrationManager({ diagnostics: fx.diagnostics, registerApp: async () => { throw new Error('outer', { cause: cause('ENOTFOUND') }); }, onCredentials: async () => {} });
-  manager.start();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(manager.status().error.details.stage, 'qr.begin');
-  assert.equal(manager.status().error.details.reason, 'ENOTFOUND');
-  assert.equal(fx.logs.length, 1);
-  const pending = new RegistrationManager({ diagnostics: fx.diagnostics, registerApp: async ({ signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('Abort', 'AbortError')))), onCredentials: async () => {} });
-  pending.start(); await Promise.resolve(); pending.cancel(); await Promise.resolve();
-  assert.equal(pending.status().state, 'cancelled');
-  assert.equal(fx.logs.length, 1);
-});
-
 test('test-message errors and message failures retain diagnostics without replacing business codes', () => {
   const fx = fixture();
   const result = publicConnectionTestResult(cause('ECONNRESET'), { diagnostics: fx.diagnostics });
@@ -226,11 +211,6 @@ test('copying diagnostics falls back to selectable text when the clipboard is un
 
 const transportCases = [
   ['weixin', async fetchImpl => (await import('../../../src/channels/weixin/weixin-api.mjs')).createWeixinApi({ fetchImpl }).beginLogin()],
-  ['dingtalk', async fetchImpl => new (await import('../../../src/channels/dingtalk/device-auth.mjs')).DingtalkDeviceAuth({ fetch: fetchImpl }).start()],
-  ['slack', async fetchImpl => new (await import('../../../src/channels/slack/slack-api.mjs')).SlackApi({ botToken: `xoxb-${'a'.repeat(30)}`, fetchImpl }).authTest()],
-  ['discord', async fetchImpl => new (await import('../../../src/channels/discord/discord-api.mjs')).DiscordApi({ token: `${'a'.repeat(25)}.aaaa.${'b'.repeat(25)}`, fetchImpl }).getCurrentUser()],
-  ['telegram', async fetchImpl => new (await import('../../../src/channels/telegram/telegram-api.mjs')).TelegramApi({ token: `123456:${'a'.repeat(30)}`, fetchImpl }).getMe()],
-  ['office', async fetchImpl => new (await import('../../../src/channels/office/office-transport.mjs')).OfficeTransport({ baseUrl: 'https://office.example.com', deviceId: 'device', token: 'x'.repeat(32), fetchImpl }).heartbeat({})],
 ];
 for (const [channel, request] of transportCases) {
   test(`${channel}: actual HTTP client preserves fetch causes and parser failures`, async () => {
@@ -249,15 +229,6 @@ for (const [channel, request] of transportCases) {
     }
   });
 }
-
-test('DingTalk and Office retain HTTP rejection status instead of only a generic failure', async () => {
-  for (const [channel, request] of transportCases.filter(([channel]) => ['dingtalk', 'office'].includes(channel))) {
-    await assert.rejects(request(async () => new Response('{}', { status: 403 })), error => {
-      assert.equal(fixture(channel).diagnostics.report(error).publicError.details.httpStatus, 403);
-      return true;
-    });
-  }
-});
 
 test('copy button writes the normalized diagnostic and confirms success', async t => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');

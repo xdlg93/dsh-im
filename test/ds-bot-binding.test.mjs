@@ -115,14 +115,6 @@ test('DS Bot model update forwards cancellation to its in-flight request', async
   assert.equal(requestSignal.reason, controller.signal.reason);
 });
 
-test('legacy iMessage direct keys cannot disguise native group chats as private', () => {
-  assert.equal(privateDeliverySuggestionFromConversationKey('imessage', 'direct:iMessage;+;chat123'), null);
-  assert.equal(privateDeliverySuggestionFromConversationKey('imessage', 'direct:unknown'), null);
-  assert.deepEqual(privateDeliverySuggestionFromConversationKey('imessage', 'direct:any;-;+123456789'), {
-    kind: 'user', route: { chatGuid: 'any;-;+123456789' },
-  });
-});
-
 test('DS Bot detection distinguishes installation, activation, read-only and unavailable; only exposes bot identity', async () => {
   let bundle = null;
   let value = { bots: [{ ...bot, secrets: 'never expose' }], readOnly: null };
@@ -257,8 +249,8 @@ test('bind, persist, rollover, desktop sync and unbind reuse one session without
   assert.equal((await f.ask('after unbind')).sessionId, 'ordinary-new-session');
 });
 
-test('bound Feishu model picker and reasoning command update DS Bot without creating an IM session', async (t) => {
-  const f = await fixture(t, { channel: 'feishu', key: 'p2p:ou_owner' });
+test('bound model picker and reasoning command update DS Bot without creating an IM session', async (t) => {
+  const f = await fixture(t, { channel: 'weixin', key: 'p2p:wx', target: { kind: 'user', route: { toUserId: 'wx' } } });
   await f.service.bindDsBot('im-one', f.key, bot.id);
   // A saved binding can outlive the IM chat's locally remembered session.
   await f.state.clearSession(f.key);
@@ -284,7 +276,7 @@ test('bound Feishu model picker and reasoning command update DS Bot without crea
 });
 
 test('bound model selection rejects stale and missing DS Bot without mutating another session', async (t) => {
-  const f = await fixture(t, { channel: 'feishu', key: 'p2p:ou_owner' });
+  const f = await fixture(t, { channel: 'weixin', key: 'p2p:wx', target: { kind: 'user', route: { toUserId: 'wx' } } });
   await f.service.bindDsBot('im-one', f.key, bot.id);
   await f.scope.harness.resolveDsBotSession(f.key);
   const handle = f.scope.harness.workspaceSession(bot.sessionId, f.key);
@@ -301,7 +293,7 @@ test('bound model selection rejects stale and missing DS Bot without mutating an
 
 for (const command of ['/model provider-one/new max', '/reasoning --default']) {
   test(`bound ${command} cancelled during Bot resolution never updates the model`, async (t) => {
-    const f = await fixture(t, { channel: 'feishu', key: 'p2p:ou_owner' });
+    const f = await fixture(t, { channel: 'weixin', key: 'p2p:wx', target: { kind: 'user', route: { toUserId: 'wx' } } });
     await f.service.bindDsBot('im-one', f.key, bot.id);
     const controller = new AbortController();
     const resolve = f.dsBot.resolve;
@@ -531,16 +523,7 @@ test('concurrent selection of the same bot commits once and restores the rejecte
 
 const privateRoutes = [
   ['weixin', 'p2p:wx', { kind: 'user', route: { toUserId: 'wx' } }],
-  ['feishu', 'p2p:ou_user', { kind: 'user', route: { openId: 'ou_user' } }],
-  ['dingtalk', 'p2p:ding', { kind: 'user', route: { userId: 'ding' } }],
-  ['wecom', 'direct:wecom', { kind: 'user', route: { chatId: 'wecom' } }],
-  ['wecom-app', 'p2p:wecom', { kind: 'user', route: { chatId: 'wecom' } }],
   ['qq', 'c2c:qq', { kind: 'user', route: { userOpenId: 'qq' } }],
-  ['slack', 'direct:D123', { kind: 'conversation', route: { channelId: 'D123' } }],
-  ['telegram', 'direct:123', { kind: 'chat', route: { chatId: '123' } }],
-  ['discord', 'direct:123', { kind: 'channel', route: { channelId: '123' } }],
-  ['whatsapp', 'direct:123456789@s.whatsapp.net', { kind: 'user', route: { jid: '123456789@s.whatsapp.net' } }],
-  ['imessage', 'direct:iMessage;-;user@example.com', { kind: 'user', route: { chatGuid: 'iMessage;-;user@example.com' } }],
 ];
 
 for (const [channel, key, target] of privateRoutes) {

@@ -1,12 +1,9 @@
 import { t } from './i18n.mjs';
 
-const TEXT_CHANNELS = Object.freeze(['telegram', 'slack', 'discord', 'whatsapp', 'matrix']);
-
 function defineCatalogCommand(name, description, help, { aliases = [], ...options } = {}) {
   return Object.freeze({
     name,
     description,
-    channels: TEXT_CHANNELS,
     menuVisible: true,
     ...options,
     aliases: Object.freeze(aliases.map((alias) => Object.freeze({
@@ -53,7 +50,7 @@ export const SHARED_COMMAND_CATALOG = Object.freeze([
     '/conv 工作区绝对路径或序号  设置当前对话专属工作区',
     '/conv clear  清除专属工作区，回到 bot 默认工作区',
   ], {
-    // Aliases stay typeable and stay in /help, but the native Telegram menu
+    // Aliases stay typeable and stay in /help, but the native command menu
     // lists each command once; B16 in the command UX audit.
     aliases: [
       { name: 'conversation', menuVisible: false },
@@ -63,7 +60,7 @@ export const SHARED_COMMAND_CATALOG = Object.freeze([
   defineCatalogCommand('workspacelist', '列出工作区绝对路径', [
     '/workspacelist、/wsl、/workspaces  工作区列表别名（等同 /ws）',
   ], {
-    // Aliases stay typeable and stay in /help, but the native Telegram menu
+    // Aliases stay typeable and stay in /help, but the native command menu
     // lists each command once; B16 in the command UX audit.
     aliases: [
       { name: 'workspaces', menuVisible: false },
@@ -156,8 +153,10 @@ export const SHARED_COMMAND_CATALOG = Object.freeze([
   ]),
 ]);
 
+/** Commands without a declared channel list apply to every channel. */
 export function commandsForChannel(channel, catalog = SHARED_COMMAND_CATALOG) {
-  return catalog.filter((item) => item.enabled !== false && item.channels.includes(channel));
+  return catalog.filter((item) => item.enabled !== false
+    && (item.channels === undefined || item.channels.includes(channel)));
 }
 
 /**

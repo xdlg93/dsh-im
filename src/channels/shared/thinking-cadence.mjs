@@ -1,5 +1,5 @@
 /**
- * Pacing and numbering for Telegram "thinking trace" frames.
+ * Pacing and numbering for a channel's "thinking trace" frames.
  *
  * A busy turn emits dozens of 💭/🔧 messages, so the owner can pace them to at
  * most one frame per N seconds and prefix each frame with its number in the

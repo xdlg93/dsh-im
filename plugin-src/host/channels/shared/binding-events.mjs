@@ -24,7 +24,7 @@ export function createBindingAnnouncer({
   if (typeof emit !== 'function') throw new TypeError('emit is required');
 
   const conversationFields = (conversationKey) => {
-    const parsed = parse(conversationKey, { channel });
+    const parsed = parse(conversationKey);
     return {
       channel,
       conversationKey,

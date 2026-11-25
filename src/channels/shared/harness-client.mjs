@@ -666,7 +666,7 @@ export class HarnessReplyTracker {
     this.#promptFailure = new PromptFailureTracker(promptRpcId, afterSeq);
     this.#lastSeq = afterSeq;
     // Reasoning updates are opt-in per consumer: only channels that surface
-    // thinking traces (Telegram thinking mode) subscribe; every other channel
+    // thinking traces (a channel thinking mode) subscribe; every other channel
     // keeps its pre-thinking-traces update stream untouched.
     this.#reasoning = reasoning === true;
     if (finalAnswerOnly === true) this.#finalAssistantText = new AssistantTextAccumulator();
@@ -921,7 +921,7 @@ export class HarnessReplyTracker {
  * Progress updates an ask() consumer actually receives. latest 模式只投递一条
  * 最新进展；assistant-message 是分步推送专用更新，且 canonical 去重后可能成为
  * 批次唯一变化，绝不能冒充进度投给全部渠道。reasoning 同为思考留痕渠道专用，
- * 默认模式下不得冒充进度（钉钉、企微等会展示其 text）。
+ * 默认模式下不得冒充进度（部分渠道会展示其 text）。
  */
 export function visibleProgressUpdates(updates, progressMode) {
   if (progressMode === 'all') return updates;
@@ -2096,8 +2096,8 @@ export class HarnessClient {
         progressTail = progressTail
           .then(() => onUpdate(update))
           .catch((error) => {
-            // The WeCom SDK rejects with the raw ack frame (no .message), so
-            // surface errcode/errmsg explicitly instead of printing undefined.
+            // Some SDKs reject with a raw ack frame (no .message), so surface
+            // errcode/errmsg explicitly instead of printing undefined.
             const detail = error instanceof Error
               ? error.message
               : `${error?.errmsg ?? error?.body?.errmsg ?? '(no message)'} (errcode=${error?.errcode ?? error?.body?.errcode ?? 'unknown'})`;

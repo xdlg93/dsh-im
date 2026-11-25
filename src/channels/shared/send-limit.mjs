@@ -1,7 +1,7 @@
 /**
- * Per-chat send limit for Telegram.
+ * Per-chat send limit for a bot.
  *
- * Telegram counts the messages a bot creates per chat and answers 429 once the
+ * The platform counts the messages a bot creates per chat and answers 429 once the
  * budget for a chat is gone. The bot therefore paces its own new messages and
  * waits for the next free slot instead of dropping them. The value lives in the
  * bot config, is editable from the settings page, and is clamped on both sides:
@@ -13,7 +13,7 @@
 export const SET_SEND_LIMIT_ENDPOINT = 'bot.send-limit.set';
 export const DEFAULT_SEND_LIMIT_PER_MINUTE = 15;
 export const SEND_LIMIT_MIN_PER_MINUTE = 1;
-/** Above this the bot would only wait for a budget Telegram never grants. */
+/** Above this the bot would only wait for a budget the platform never grants. */
 export const SEND_LIMIT_MAX_PER_MINUTE = 30;
 
 function clampSendLimit(value) {

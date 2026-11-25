@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { deepStrictEqual, equal, match, ok, throws } from 'node:assert';
 
-import { buildConversationRoute, encodeConversationRouteKey } from '../../../src/channels/shared/conversation/route.mjs';
 import { createSemanticMessage } from '../../../src/channels/shared/conversation/semantic-message.mjs';
 import { evaluateTrigger, normalizeTriggerPolicy } from '../../../src/channels/shared/conversation/trigger-policy.mjs';
 import { RootContextRegistry } from '../../../src/channels/shared/conversation/root-context.mjs';
@@ -13,7 +12,6 @@ import { WindowAmbientProvider } from '../../../src/channels/shared/conversation
 import { composeContextPrompt, contextBlockFor, dedupeContextEntries, renderContextEntries } from '../../../src/channels/shared/conversation/context-builder.mjs';
 import { CONTEXT_NOTE } from '../../../src/channels/shared/injected-context.mjs';
 import { ConversationStateStore } from '../../../src/channels/shared/conversation-state-store.mjs';
-import { MatrixRoomHistoryStore } from '../../../src/channels/matrix/matrix-room-history.mjs';
 
 const tempDirectories = new Set();
 
@@ -25,45 +23,6 @@ async function makeTempDirectory(prefix) {
 
 test.after(async () => {
   for (const directory of tempDirectories) await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-});
-
-test('conversation key codecs reproduce the established on-disk keys byte for byte', () => {
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '@Rjd:el.weetar.com',
-    senderId: '@Rjd:EL.Weetar.com',
-    kind: 'direct',
-  })), 'direct:dm:@rjd:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '!BrESOucPXQfqxaQTiw:el.weetar.com',
-  })), 'group:room:!BrESOucPXQfqxaQTiw:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '!BrESOucPXQfqxaQTiw:el.weetar.com',
-    threadId: '$FWLVNgabc:el.weetar.com',
-  })), 'group:room:!BrESOucPXQfqxaQTiw:el.weetar.com$$FWLVNgabc:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'feishu',
-    chatId: 'oc_abc',
-  })), 'group:oc_abc');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'feishu',
-    chatId: 'oc_abc',
-    threadId: 'om_root',
-  })), 'group:oc_abc:thread:om_root');
-});
-
-test('route building freezes the scope discriminant and refuses keys it cannot encode', () => {
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '!r:x', threadId: '$t:x' }).scope, 'thread');
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '!r:x' }).scope, 'group');
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '@u:x', senderId: '@u:x', kind: 'dm' }).scope, 'dm');
-  throws(() => buildConversationRoute({ channel: '', chatId: '!r:x' }), TypeError);
-  throws(() => buildConversationRoute({ channel: 'matrix' }), TypeError);
-  throws(() => encodeConversationRouteKey({ channel: 'nope', scope: 'group', chatId: 'x' }), TypeError);
-  throws(() => encodeConversationRouteKey(buildConversationRoute({
-    channel: 'feishu', chatId: '@user:x', senderId: '@user:x', kind: 'direct',
-  })), TypeError);
 });
 
 test('the trigger table encodes the whole product rule set', () => {
@@ -106,24 +65,24 @@ test('the trigger table encodes the whole product rule set', () => {
 
 test('a semantic message validates identity fields and normalizes the rest', () => {
   const message = createSemanticMessage({
-    id: '$e1:x',
-    channel: 'matrix',
-    chatId: '!r:x',
-    threadId: '$t:x',
-    sender: { id: ' @a:x ', name: '  ' },
+    id: 'event-one',
+    channel: 'qq',
+    chatId: 'c2c:owner',
+    threadId: 'thread-one',
+    sender: { id: ' owner ', name: '  ' },
     timestamp: 0,
     content: '你好',
-    replyTo: { id: '$p:x', sender: '@b:x', timestamp: 5 },
+    replyTo: { id: 'quoted', sender: 'other', timestamp: 5 },
     trigger: { mentionedBot: true },
     kind: 'group',
   });
-  deepStrictEqual(message.sender, Object.freeze({ id: '@a:x' }));
+  deepStrictEqual(message.sender, Object.freeze({ id: 'owner' }));
   deepStrictEqual(message.trigger, Object.freeze({ mentionedBot: true, repliedToBot: false, commandLike: false }));
-  deepStrictEqual(message.replyTo, Object.freeze({ id: '$p:x', sender: '@b:x', timestamp: 5 }));
+  deepStrictEqual(message.replyTo, Object.freeze({ id: 'quoted', sender: 'other', timestamp: 5 }));
   ok(message.timestamp > 0, 'a non-positive origin falls back to the ingestion time');
-  throws(() => createSemanticMessage({ channel: 'matrix', chatId: '!r:x', sender: { id: '@a:x' } }), TypeError);
-  throws(() => createSemanticMessage({ id: '$e', chatId: '!r:x', sender: { id: '@a:x' } }), TypeError);
-  throws(() => createSemanticMessage({ id: '$e', channel: 'matrix', sender: { id: '@a:x' } }), TypeError);
+  throws(() => createSemanticMessage({ channel: 'qq', chatId: 'c2c:owner', sender: { id: 'owner' } }), TypeError);
+  throws(() => createSemanticMessage({ id: '$e', chatId: 'c2c:owner', sender: { id: 'owner' } }), TypeError);
+  throws(() => createSemanticMessage({ id: '$e', channel: 'qq', sender: { id: 'owner' } }), TypeError);
 });
 
 test('the root context registry injects a root once and never consumes it on failure paths', async () => {
@@ -209,9 +168,42 @@ test('the event LRU evicts the least recently used entry and refreshes on read',
   deepStrictEqual(lru.size, 0);
 });
 
+/** Minimal room-history record: the provider only needs search/pending/markInjected. */
+function roomHistoryRecord() {
+  const entries = [];
+  const injected = new Set();
+  return {
+    append(entry) { entries.push(entry); return true; },
+    search({ roomId, from, to, limit }) {
+      return entries
+        .filter((entry) => entry.roomId === roomId && entry.ts >= from && entry.ts <= to)
+        .slice(-limit);
+    },
+    // The record's pending list is un-consumed human speech: bot echoes and
+    // already-injected entries are never offered again.
+    pending({ roomId, limit }) {
+      return entries
+        .filter((entry) => entry.roomId === roomId
+          && entry.kind === 'human'
+          && entry.injected !== true
+          && !injected.has(entry.eventId))
+        .slice(-limit);
+    },
+    async markInjected(roomId, eventIds) {
+      let marked = 0;
+      for (const eventId of eventIds) {
+        if (injected.has(eventId)) continue;
+        injected.add(eventId);
+        marked += 1;
+      }
+      return marked;
+    },
+    async flush() {},
+  };
+}
+
 test('the ambient provider follows the same-sender burst run and falls back to the recent window', async () => {
-  const directory = await makeTempDirectory('dsh-im-conversation-ambient-');
-  const store = await new MatrixRoomHistoryStore(join(directory, 'matrix-history.json')).load();
+  const store = roomHistoryRecord();
   const room = '!ambient:example.org';
   const now = 10_000_000;
   const seed = [
