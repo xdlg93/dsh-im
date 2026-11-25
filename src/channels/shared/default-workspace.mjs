@@ -44,6 +44,41 @@ export function defaultImWorkspace(config = {}, { dshWorkspaces = [] } = {}) {
   return resolve(dshHome, 'im');
 }
 
+/**
+ * Register the plugin's directory as a DSH Workspace.
+ *
+ * A directory is only a Workspace once the Host registry knows it, and only a
+ * registered Workspace shows up in the sidebar together with the Sessions whose
+ * cwd is that directory. Without this the bot writes into a folder the reader
+ * cannot find, so adoption is part of creating the default directory.
+ *
+ * @returns whether the directory is registered; a Host without the Workspace
+ * services reports false and the caller carries on.
+ */
+export async function adoptDshWorkspace(ctx, path) {
+  if (typeof path !== 'string' || !isAbsolute(path)) return false;
+  try {
+    const registry = typeof ctx?.get === 'function' ? ctx.get('workspaceRegistry') : undefined;
+    if (registry && typeof registry.resolveByPath === 'function' && await registry.resolveByPath(path)) {
+      return true;
+    }
+  } catch {
+    // An unreadable registry falls through to the controller, which is the only
+    // writer anyway.
+  }
+  const controller = typeof ctx?.get === 'function' ? ctx.get('workspaceController') : undefined;
+  if (!controller || typeof controller.create !== 'function') return false;
+  try {
+    // The registry adopts an existing directory only; the bot needs the directory
+    // whether or not adoption succeeds.
+    await mkdir(path, { recursive: true });
+    await controller.create({ path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function sameWorkspacePath(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string'
     || !isAbsolute(left) || !isAbsolute(right)) return false;

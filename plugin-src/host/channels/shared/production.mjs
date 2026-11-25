@@ -19,7 +19,7 @@ import {
   createWorkspaceAwareController,
   observeBotWorkspaceRemovals,
 } from '../../../../src/channels/shared/bot-workspace-store.mjs';
-import { dshWorkspacePaths, prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
+import { adoptDshWorkspace, dshWorkspacePaths, prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
 import { listAgentPresetCatalog } from '../../../../src/channels/shared/agent-preset.mjs';
 import { listModelCatalog } from '../../../../src/channels/shared/model-setting.mjs';
 import {
@@ -74,6 +74,9 @@ export async function createTokenProductionController(ctx, config, internals, de
   const paths = pluginPaths(config, channel);
   const configStore = await new ResolvedConfigStore(paths.config).load();
   const { defaultWorkspace, ungroupedWorkspace } = await prepareBotWorkspace(config, { dshWorkspaces: dshWorkspacePaths(ctx) });
+  // A directory the sidebar cannot show is a directory the reader cannot find, so
+  // the default directory is registered as a Workspace before any Session uses it.
+  await adoptDshWorkspace(ctx, defaultWorkspace);
   const WorkspaceStore = internals.WorkspaceStore ?? BotWorkspaceStore;
   const workspaces = internals.workspaces
     ?? await new WorkspaceStore(paths.workspaces, { defaultWorkspace, ungroupedWorkspace, groupByAgentPreset: config.groupByAgentPreset }).load();

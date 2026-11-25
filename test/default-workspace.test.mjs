@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  adoptDshWorkspace,
   defaultImWorkspace,
   dshWorkspacePaths,
   IM_WORKSPACE_DIRECTORY,
@@ -465,4 +466,40 @@ test('Workspace paths come from the Host registry and degrade to nothing', () =>
   assert.deepEqual(dshWorkspacePaths({ get: () => ({ list: () => { throw new Error('boom'); } }) }), []);
   assert.deepEqual(dshWorkspacePaths({ get: () => undefined }), []);
   assert.deepEqual(dshWorkspacePaths({}), []);
+});
+
+test('the default directory is adopted as a DSH Workspace once', async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-im-adopt-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const target = join(root, 'DSH', 'dsh-im');
+  const created = [];
+  const resolved = [];
+  const controller = { create: async ({ path }) => { created.push(path); return { created: true }; } };
+  const registry = { resolveByPath: async (path) => { resolved.push(path); return undefined; } };
+  const ctx = { get: (name) => ({ workspaceRegistry: registry, workspaceController: controller })[name] };
+  assert.equal(await adoptDshWorkspace(ctx, target), true);
+  assert.deepEqual(created, [target]);
+  assert.deepEqual(resolved, [target]);
+  // Adoption needs a real directory, so the plugin creates it first.
+  assert.equal((await stat(target)).isDirectory(), true);
+
+  // Already registered: no second registration.
+  const known = {
+    get: (name) => (name === 'workspaceRegistry'
+      ? { resolveByPath: async () => ({ path: '/home/a/DSH/dsh-im' }) }
+      : controller),
+  };
+  created.length = 0;
+  assert.equal(await adoptDshWorkspace(known, '/home/a/DSH/dsh-im'), true);
+  assert.deepEqual(created, []);
+});
+
+test('Workspace adoption degrades when the Host has no Workspace services', async () => {
+  assert.equal(await adoptDshWorkspace({ get: () => undefined }, '/home/a/DSH/dsh-im'), false);
+  assert.equal(await adoptDshWorkspace({}, '/home/a/DSH/dsh-im'), false);
+  assert.equal(await adoptDshWorkspace({ get: () => undefined }, 'relative/path'), false);
+  const failing = { get: (name) => (name === 'workspaceController'
+    ? { create: async () => { throw new Error('registry unavailable'); } }
+    : { resolveByPath: async () => { throw new Error('unreadable'); } }) };
+  assert.equal(await adoptDshWorkspace(failing, '/home/a/DSH/dsh-im'), false);
 });
