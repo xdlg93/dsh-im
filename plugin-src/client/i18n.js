@@ -380,6 +380,7 @@ const EN = Object.freeze({
   '微信仍未连接，插件会继续自动重试。': 'WeChat is still not connected; the plugin keeps retrying automatically.',
   '微信连接检查完成。': 'The WeChat connection check finished.',
   '微信没有绑定完成': 'WeChat was not bound',
+  '这个版本还没有发布到 npm，请用 git 方式重新安装来更新。': 'This version is not published to npm yet; reinstall it from git to update.',
   '填入示例': 'Use example',
   '清空': 'Clear',
   '选择在哪些会话中启用、提供哪些来源字段，以及如何使用这些信息。仅使用已有消息元数据，不查询平台 API。': 'Choose which conversations to enhance, which source fields to include, and how to use them. Only existing message metadata is used; no platform APIs are queried.',

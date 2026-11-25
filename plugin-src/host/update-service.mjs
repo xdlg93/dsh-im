@@ -29,6 +29,9 @@ export async function fetchNpmRelease(fetchImpl = globalThis.fetch, timeoutMs = 
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
     });
+    // This fork is not on npm yet: a missing package is a state, not a network
+    // failure, and the reader deserves the difference.
+    if (response.status === 404) throw updateError('not-published');
     if (!response.ok) throw updateError('check-failed');
     if (Number(response.headers.get('content-length')) > MAX_METADATA_BYTES) {
       throw updateError('invalid-release');

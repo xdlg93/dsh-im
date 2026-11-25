@@ -19,6 +19,7 @@ const BLOCKED_REASONS = Object.freeze({
   'recovery-required': '上次安装结果无法确认，请先检查此 profile 的插件安装状态。',
 });
 const ERROR_MESSAGES = Object.freeze({
+  'not-published': '这个版本还没有发布到 npm，请用 git 方式重新安装来更新。',
   'check-failed': '无法访问 npm 或请求超时，请稍后重新检查。',
   'update-failed': '更新请求失败，请重试。',
   'invalid-release': 'npm 返回的版本信息无效，暂时无法更新。',
