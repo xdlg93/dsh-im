@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH IM bots",
+    "zh": "DSH IM 机器人"
+  },
+  "description": {
+    "en": "Connect WeChat and QQ to DeepSeek Harness through QR-code login.",
+    "zh": "通过扫码把微信、QQ 接入 DeepSeek Harness。"
+  },
+  "metadata": {
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "im",
+      "wechat",
+      "weixin",
+      "qq"
+    ]
+  },
+  "plugins": [
+    {
+      "name": "@xdlg93/dsh-im",
+      "title": {
+        "en": "DSH IM bots (WeChat + QQ)",
+        "zh": "DSH IM 机器人（微信 + QQ）"
+      },
+      "description": {
+        "en": "Connect WeChat and QQ to DeepSeek Harness with QR-code login: bind from the settings page, then chat, apply group/direct policies, enrich context, push proactive messages, and bind Sessions to workspaces.",
+        "zh": "把微信、QQ 扫码接入 DeepSeek Harness：设置页扫码绑定，机器人收发消息、群聊与私聊策略、上下文增强、主动推送、会话同步与工作区绑定。"
+      },
+      "icon": "icons/dsh-im.png",
+      "author": "xdlg93",
+      "homepage": "https://github.com/xdlg93/dsh-im#readme",
+      "repository": {
+        "url": "https://github.com/xdlg93/dsh-im"
+      },
+      "metadata": {
+        "keywords": [
+          "deepseek-harness",
+          "dsh",
+          "dsh-plugin",
+          "ai-agent",
+          "im",
+          "instant-messaging",
+          "chatbot",
+          "wechat",
+          "weixin",
+          "qq",
+          "qr-login",
+          "ai-office"
+        ]
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1795585221,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/xdlg93/dsh-im",
+            "commit": "b4e7a3cf593b411dfa32cc07f7b9f66c4f7f2c97"
+          },
+          "engines": {
+            "dsh": "^0.2.2-rc.5"
+          }
+        }
+      ]
+    }
+  ]
+}
