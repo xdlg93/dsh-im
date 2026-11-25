@@ -145,7 +145,7 @@ QQ 通道使用 `@tencent-connect/qqbot-connector` 的扫码授权创建或绑�
 ### 会话与工作区
 
 - 每张机器人卡片显示当前 Harness 工作区，可直接填写绝对路径或打开目录选择器切换。切换只清除该机器人的旧聊天映射，不删除、不清空旧 Session。
-- 新机器人默认使用 `$DSH_HOME/im`（未设置 `DSH_HOME` 时为 `~/.dsh/im`），该目录在真正被使用时才创建；新会话显示在「未分组」。
+- 新机器人的默认工作区是**与 DSH 工作区同级**的 `dsh-im` 目录（例如 DSH 工作区是 `/home/me/DSH/workspace`，默认目录就是 `/home/me/DSH/dsh-im`），避免机器人的文件写进你自己的工作区；Host 没有注册任何工作区时（headless / CLI）回落到 `$DSH_HOME/im`（未设置 `DSH_HOME` 时为 `~/.dsh/im`）。该目录在真正被使用时才创建；新会话显示在「未分组」。
 - 在聊天里发送 `/sessionlist`、`/session <ID 或序号>` 可以查看和绑定已有会话，`/new` 让下一条消息开一个全新会话。
 - 可选按 Agent Preset 自动分组：在插件配置中设置 `groupByAgentPreset: true` 后，新会话会进入 `presets/<preset-id>` 工作区。详见 [配置说明](docs/preset-workspaces.md)。
 

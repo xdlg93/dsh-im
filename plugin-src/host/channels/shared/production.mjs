@@ -19,7 +19,7 @@ import {
   createWorkspaceAwareController,
   observeBotWorkspaceRemovals,
 } from '../../../../src/channels/shared/bot-workspace-store.mjs';
-import { prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
+import { dshWorkspacePaths, prepareBotWorkspace } from '../../../../src/channels/shared/default-workspace.mjs';
 import { listAgentPresetCatalog } from '../../../../src/channels/shared/agent-preset.mjs';
 import { listModelCatalog } from '../../../../src/channels/shared/model-setting.mjs';
 import {
@@ -73,7 +73,7 @@ export async function createTokenProductionController(ctx, config, internals, de
   const agentPresetCatalog = () => listAgentPresetCatalog(ctx);
   const paths = pluginPaths(config, channel);
   const configStore = await new ResolvedConfigStore(paths.config).load();
-  const { defaultWorkspace, ungroupedWorkspace } = await prepareBotWorkspace(config);
+  const { defaultWorkspace, ungroupedWorkspace } = await prepareBotWorkspace(config, { dshWorkspaces: dshWorkspacePaths(ctx) });
   const WorkspaceStore = internals.WorkspaceStore ?? BotWorkspaceStore;
   const workspaces = internals.workspaces
     ?? await new WorkspaceStore(paths.workspaces, { defaultWorkspace, ungroupedWorkspace, groupByAgentPreset: config.groupByAgentPreset }).load();

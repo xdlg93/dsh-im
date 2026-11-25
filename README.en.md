@@ -147,7 +147,7 @@ Both channels share one feature set. Everything is configured in the matching ta
 ### Sessions and workspaces
 
 - Each bot card shows the current Harness workspace. Type an absolute path or open the directory picker to switch. Switching only clears that bot's chat mappings; it never deletes, clears, or archives old sessions.
-- New bots default to `$DSH_HOME/im` (`~/.dsh/im` when `DSH_HOME` is unset). The directory is created only when something actually uses it, and new sessions appear under "Ungrouped".
+- A new bot's default Workspace is a `dsh-im` directory **beside** your DSH Workspace (a Workspace at `/home/me/DSH/workspace` gets `/home/me/DSH/dsh-im`), so bot files never land in the Workspace you work in; a Host with no registered Workspace (headless, CLI) keeps `$DSH_HOME/im` (`~/.dsh/im` when `DSH_HOME` is unset). The directory is created only when something actually uses it, and new sessions appear under "Ungrouped".
 - In chat, `/sessionlist` lists sessions and `/session <ID or index>` binds one; `/new` starts a fresh session on the next message.
 - Optional Agent Preset grouping: set `groupByAgentPreset: true` in the plugin config and new sessions land in `presets/<preset-id>` workspaces. See [the configuration notes](docs/preset-workspaces.md).
 

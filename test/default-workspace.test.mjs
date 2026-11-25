@@ -4,7 +4,12 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { defaultImWorkspace, prepareBotWorkspace } from '../src/channels/shared/default-workspace.mjs';
+import {
+  defaultImWorkspace,
+  dshWorkspacePaths,
+  IM_WORKSPACE_DIRECTORY,
+  prepareBotWorkspace,
+} from '../src/channels/shared/default-workspace.mjs';
 import { HarnessClient } from '../src/channels/shared/harness-client.mjs';
 import { BotWorkspaceStore, createBotWorkspaceScope, createWorkspaceAwareController } from '../src/channels/shared/bot-workspace-store.mjs';
 import { ConversationStateStore } from '../src/channels/shared/conversation-state-store.mjs';
@@ -419,4 +424,45 @@ test('binding an old default session from a custom workspace restores cwd before
   assert.equal(workspaces.workspaceFor('bot'), workspace);
   assert.equal(state.sessionFor('direct:chat'), 'existing');
   assert.deepEqual(restored, ['existing']);
+});
+
+test('the default directory sits beside the reader Workspace, not inside it', async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-im-sibling-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const readerWorkspace = join(root, 'DSH', 'workspace');
+  const prepared = await prepareBotWorkspace(
+    { dshHome: join(root, 'unused-home') },
+    { dshWorkspaces: [readerWorkspace] },
+  );
+  assert.equal(prepared.defaultWorkspace, join(root, 'DSH', IM_WORKSPACE_DIRECTORY));
+  assert.equal(prepared.ungroupedWorkspace, prepared.defaultWorkspace);
+  // A configured directory still wins over the sibling default.
+  const custom = join(root, 'elsewhere');
+  const overridden = await prepareBotWorkspace(
+    { dshHome: join(root, 'unused-home'), workspace: custom },
+    { dshWorkspaces: [readerWorkspace] },
+  );
+  assert.equal(overridden.defaultWorkspace, custom);
+  assert.equal(overridden.ungroupedWorkspace, join(root, 'DSH', IM_WORKSPACE_DIRECTORY));
+});
+
+test('the sibling default falls back to the historical directory without a Workspace', async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-im-fallback-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  assert.equal(defaultImWorkspace({ dshHome: join(root, 'home') }, { dshWorkspaces: [] }),
+    join(root, 'home', 'im'));
+  // Relative and malformed entries are ignored rather than resolved against cwd.
+  assert.equal(defaultImWorkspace({ dshHome: join(root, 'home') },
+    { dshWorkspaces: ['relative/path', null, 42] }), join(root, 'home', 'im'));
+});
+
+test('Workspace paths come from the Host registry and degrade to nothing', () => {
+  const registry = {
+    list: () => [{ path: '/home/a/workspace' }, { path: '/home/b/project' }, { title: 'no path' }],
+  };
+  assert.deepEqual(dshWorkspacePaths({ get: (name) => (name === 'workspaceRegistry' ? registry : undefined) }),
+    ['/home/a/workspace', '/home/b/project']);
+  assert.deepEqual(dshWorkspacePaths({ get: () => ({ list: () => { throw new Error('boom'); } }) }), []);
+  assert.deepEqual(dshWorkspacePaths({ get: () => undefined }), []);
+  assert.deepEqual(dshWorkspacePaths({}), []);
 });
