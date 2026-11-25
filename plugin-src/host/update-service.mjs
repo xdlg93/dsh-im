@@ -188,6 +188,15 @@ export function createUpdateService({
     if (!JOB_STATES.has(job.state) || typeof job.id !== 'string' || !semver.valid(job.targetVersion)) {
       throw updateError('state-unavailable');
     }
+    // The state directory is keyed by profile, not by package, so an install that
+    // replaced another dsh-im build (the upstream @xmanrui/dsh-im lineage) still
+    // finds its job here. That record describes versions this package never had,
+    // and reporting it as an interrupted install would block every later check, so
+    // discard the foreign record instead of trusting it.
+    if (job.packageName !== PACKAGE_NAME) {
+      await clearForeignJob(paths, job);
+      return null;
+    }
     // Recovery is derived from the current installation, never a persisted flag.
     job = { ...job, recoverable: false };
     const historical = job.id !== activeJob?.id;
@@ -216,6 +225,23 @@ export function createUpdateService({
         : { ...job, recoverable: true };
     }
     return job;
+  }
+
+  /**
+   * Remove a job document, its lock and its rollback snapshot when they describe
+   * another package. Failure to clean up must not turn a stale record into an
+   * error, so every step is best effort.
+   */
+  async function clearForeignJob(paths, job) {
+    for (const path of [paths.state, paths.lock, join(paths.directory, 'before.json')]) {
+      try {
+        await unlink(path);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') return;
+      }
+    }
+    unsavedJob = null;
+    void job;
   }
 
   function snapshot(environment, job) {
@@ -374,6 +400,7 @@ export function createUpdateService({
       if (!paths) throw updateError('state-unavailable');
       const job = {
         id: randomUUID(), requestId, state: 'installing', message: null,
+        packageName: PACKAGE_NAME,
         targetVersion: confirmation.release.version, previousVersion: environment.installedVersion,
         startedAt: now(), updatedAt: now(),
       };

@@ -153,6 +153,33 @@ test('historical successful jobs allow subsequent updates after external upgrade
   }
 });
 
+test('a job recorded by another dsh-im package is discarded instead of blocking updates', async (t) => {
+  const f = await fixture(t);
+  const directory = join(f.homeDir, 'updates', 'dsh-im',
+    (await import('node:crypto')).createHash('sha256').update(f.environment.profileDir).digest('hex').slice(0, 24));
+  await mkdir(directory, { recursive: true });
+  const statePath = join(directory, 'state.json');
+  // What the upstream @xmanrui/dsh-im lineage left behind: a restart-required job
+  // for versions this package never published, and no packageName to identify it.
+  await writeFile(statePath, JSON.stringify({
+    id: 'upstream-job', requestId: 'upstream-request', state: 'restart-required', message: null,
+    targetVersion: '4.39.0', previousVersion: '4.25.0', startedAt: 1, updatedAt: 2,
+  }));
+  await writeFile(join(directory, 'before.json'), '{}\n');
+
+  const snapshot = await f.service.status();
+  assert.equal(snapshot.job, null, 'the foreign job must not be reported');
+  assert.notEqual(snapshot.blockedReason, 'recovery-required');
+  assert.notEqual(snapshot.blockedReason, 'installation-changed');
+  await assert.rejects(readFile(statePath, 'utf8'), /ENOENT/);
+  await assert.rejects(readFile(join(directory, 'before.json'), 'utf8'), /ENOENT/);
+
+  // A fresh check still works: the stale record no longer blocks the flow.
+  f.state.release = release('3.0.8');
+  const { checkId } = await f.service.check();
+  assert.ok(checkId);
+});
+
 test('historical recovery preserves locks, installation validation and restart requirements', async (t) => {
   const cases = [
     { name: 'live lock', lock: { id: 'other', pid: process.pid } },

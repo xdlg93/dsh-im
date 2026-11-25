@@ -470,10 +470,9 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
           '请在机器人空闲时安装；安装会修改当前 profile 的依赖，完成后需手动重启。') : null,
         h('aside', { className: 'dim-updateHint', 'aria-label': 'DSH 版本兼容说明' },
           h('strong', null, 'DSH 版本兼容说明'),
-          h('p', { className: 'dim-updateManualHint' }, 'dsh-im 4.25.0 支持到 DSH v0.1.6-alpha.2。'),
-          h('p', { className: 'dim-updateManualHint' }, 'dsh-im 4.39.0 仅支持 DSH 0.2.0-rc.2。'),
-          h('p', { className: 'dim-updateManualHint' }, 'dsh-im 5.0.0 仅支持 DSH 0.2.1-rc.2。'),
-          h('p', { className: 'dim-updateManualHint' }, 'dsh-im 5.10.0 起支持 DSH 0.2.2-rc.5。')),
+          h('p', { className: 'dim-updateManualHint' }, 'dsh-im 1.0.0 起支持 DSH 0.2.2-rc.5 及以上（0.2.x 全系列）。'),
+          h('p', { className: 'dim-updateManualHint' }, '已在 DSH 0.2.3-alpha.2 上修复 Cordis 4.2 的根上下文兼容问题。'),
+          h('p', { className: 'dim-updateManualHint' }, '未发布到 npm 时不会自动更新，请按原安装方式用 git 重新安装。')),
         h(ManualUpdateCommand, {
           key: manualCommand ?? 'unavailable', command: manualCommand,
           disabled: busyAction || activeJob || uncertainInstall,

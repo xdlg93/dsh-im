@@ -53,12 +53,16 @@ test('the declared compatibility baseline is a released host this client targets
 
 test('the update panel documents the current compatibility baseline', async () => {
   const panel = await readFile(resolve(root, 'plugin-src/client/update-panel.js'), 'utf8');
-  assert.match(panel, /dsh-im 5\.10\.0 起支持 DSH 0\.2\.2-rc\.5。/u);
+  const baseline = 'dsh-im 1.0.0 起支持 DSH 0.2.2-rc.5 及以上（0.2.x 全系列）。';
+  assert.ok(panel.includes(baseline), 'the panel must state the fork baseline');
+  // The panel must describe this fork, not the upstream version ladder it replaced.
+  for (const stale of ['4.25.0', '4.39.0', '5.0.0', '5.10.0']) {
+    assert.ok(!panel.includes(`dsh-im ${stale}`), `the panel must not list upstream ${stale}`);
+  }
   for (const file of ['plugin-src/client/i18n.js', 'plugin-src/client/i18n-ru.js']) {
     const source = await readFile(resolve(root, file), 'utf8');
-    assert.match(
-      source,
-      /'dsh-im 5\.10\.0 起支持 DSH 0\.2\.2-rc\.5。'/u,
+    assert.ok(
+      source.includes(`'${baseline}'`),
       `${file} must translate the compatibility hint`,
     );
   }
