@@ -1,18 +1,25 @@
 name: Release
 
-# A local DSH has no GitHub token, so the release is published by Actions: the
-# workflow's own GITHUB_TOKEN has contents:write, and `gh` is preinstalled on the
-# runner. Push a tag (or dispatch this workflow with an existing tag) and the
-# Release is created with the curated notes and the served tarball attached.
+# A local DSH has no GitHub token, so releases are published by Actions: the
+# workflow's own GITHUB_TOKEN has contents:write and the runner ships `gh`.
+#
+# Three ways in:
+#   - push a v* tag            → publish that tag's release
+#   - change docs/releases/**  → refresh every listed release from its notes file
+#   - workflow_dispatch        → publish the tag given, or refresh all when empty
 on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - 'docs/releases/**'
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, for example v1.3.2
-        required: true
+        description: Tag to publish, for example v1.3.2 (empty refreshes every docs/releases file)
+        required: false
 
 permissions:
   contents: write
@@ -25,33 +32,56 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Create or update the GitHub release
+      - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+          TAG_INPUT: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # docs/releases/<tag>.md is the curated body; without it, let GitHub
-          # generate notes from the commits.
-          if [ -f "docs/releases/${TAG}.md" ]; then
-            NOTES="--notes-file docs/releases/${TAG}.md"
+
+          if [ -n "${TAG_INPUT}" ]; then
+            targets="${TAG_INPUT}"
+          elif [ "${REF_TYPE}" = "tag" ]; then
+            targets="${REF_NAME}"
           else
-            NOTES="--generate-notes"
+            # A notes change refreshes every release it names.
+            targets="$(ls docs/releases/*.md 2>/dev/null | sed 's#docs/releases/##; s#\.md$##' | tr '\n' ' ' || true)"
           fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TAG" $NOTES
-          else
-            gh release create "$TAG" --title "$TAG" $NOTES
-          fi
-          # The tarball the plugin index offers as its no-git channel.
-          if compgen -G "docs/pkg/*.tgz" >/dev/null; then
-            gh release upload "$TAG" docs/pkg/*.tgz --clobber
-          fi
-          # One canonical asset per release: drop anything else, such as a tarball
-          # uploaded by hand before this workflow existed.
-          CANONICAL="dsh-im-${TAG#v}.tgz"
-          while IFS= read -r asset; do
-            [ -z "$asset" ] && continue
-            [ "$asset" = "$CANONICAL" ] && continue
-            gh release delete-asset "$TAG" "$asset" --yes
-          done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
+          echo "targets: ${targets:-<none>}"
+
+          for TAG in ${targets}; do
+            if ! git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+              echo "skip ${TAG}: no such tag"
+              continue
+            fi
+            # docs/releases/<tag>.md is the curated body; without it, let GitHub
+            # generate notes from the commits.
+            if [ -f "docs/releases/${TAG}.md" ]; then
+              NOTES="--notes-file docs/releases/${TAG}.md"
+            else
+              NOTES="--generate-notes"
+            fi
+            if gh release view "${TAG}" >/dev/null 2>&1; then
+              gh release edit "${TAG}" --title "${TAG}" ${NOTES}
+              echo "updated ${TAG}"
+            else
+              gh release create "${TAG}" --title "${TAG}" ${NOTES}
+              echo "created ${TAG}"
+            fi
+
+            # Assets belong to the release being cut, not to a notes refresh.
+            if [ "${targets}" = "${TAG}" ] && compgen -G "docs/pkg/*.tgz" >/dev/null; then
+              gh release upload "${TAG}" docs/pkg/*.tgz --clobber
+              # One canonical asset per release: drop anything else, such as a
+              # tarball uploaded by hand before this workflow existed.
+              CANONICAL="dsh-im-${TAG#v}.tgz"
+              while IFS= read -r asset; do
+                [ -z "${asset}" ] && continue
+                [ "${asset}" = "${CANONICAL}" ] && continue
+                gh release delete-asset "${TAG}" "${asset}" --yes
+              done < <(gh release view "${TAG}" --json assets --jq '.assets[].name')
+            fi
+          done
