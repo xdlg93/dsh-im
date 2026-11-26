@@ -24,12 +24,27 @@ dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-<版本>
 发版流程：
 
 ```bash
-git tag -a v1.3.x -F <notes>      # 1. 打 tag
-git push origin main v1.3.x       # 2. 推送
-npm run publish:index -- --commit "$(git rev-parse v1.3.x)"   # 3. 写入索引
-npm run pack:release              # 4. 生成 docs/pkg/dsh-im-<版本>.tgz
-git add docs/index.json docs/pkg && git commit -m "chore: publish 1.3.x in the plugin market index"
-git push origin main              # 5. 推送后 Pages 自动重建 docs/
+# 1. 版本号与 CHANGELOG（package.json 的 version 决定 tgz 文件名）
+# 2. 写 Release 正文（可选，但推荐）：docs/releases/<tag>.md
+npm run build && npm run check
+npm run pack:release              # 3. 生成 docs/pkg/dsh-im-<版本>.tgz
+git add -A && git commit -m "feat: ..."   # 4. 提交代码与安装包
+git tag -a v1.3.x -F <notes>      # 5. 打 tag
+git push origin main v1.3.x       # 6. 推送：Release 工作流自动建 Release，Pages 自动重建
+npm run publish:index -- --commit "$(git rev-parse v1.3.x)"   # 7. 写入索引
+git add docs/index.json && git commit -m "chore: publish 1.3.x in the plugin market index"
+git push origin main              # 8. 推送索引
 ```
+
+### GitHub Release 由 Actions 发布
+
+本地 DSH 没有 GitHub token，所以 Release 不手工创建，由 `.github/workflows/release.yml` 用 runner 自带的 `GITHUB_TOKEN`（`contents: write`）发布：
+
+- **推送 `v*` tag 即自动建/更新 Release**，不需要任何本地 token；
+- 正文取 `docs/releases/<tag>.md`（人工整理稿），文件不存在时用 GitHub 自动生成的变更说明；
+- 附件自动上传 `docs/pkg/*.tgz`，并删掉名称不是 `dsh-im-<版本>.tgz` 的其他附件，保证一个 Release 只有一个安装包；
+- 忘记先写整理稿、或想重发某次 Release：到 Actions 页面选 **Release → Run workflow**，填已有 tag 重跑即可（`workflow_dispatch`）。
+
+注意 tag 必须在包含 `release.yml` 的提交上，否则 tag 推送不会触发该工作流。
 
 <!-- pages retry 20261125T064505Z -->
