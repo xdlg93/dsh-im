@@ -43,7 +43,8 @@ git push origin main              # 8. 推送索引
 - **推送 `v*` tag 即自动建/更新 Release**，不需要任何本地 token；
 - 正文取 `docs/releases/<tag>.md`（人工整理稿），文件不存在时用 GitHub 自动生成的变更说明；
 - 附件自动上传 `docs/pkg/*.tgz`，并删掉名称不是 `dsh-im-<版本>.tgz` 的其他附件，保证一个 Release 只有一个安装包；
-- 忘记先写整理稿、或想重发某次 Release：到 Actions 页面选 **Release → Run workflow**，填已有 tag 重跑即可（`workflow_dispatch`）。
+- **改动 `docs/releases/**` 会刷新其中列出的所有 Release 正文**（补写历史版本的说明时用它，不需要重新打 tag）；
+- 想单独重发某次 Release：到 Actions 页面选 **Release → Run workflow**，填已有 tag 重跑即可（留空则刷新全部）。
 
 注意 tag 必须在包含 `release.yml` 的提交上，否则 tag 推送不会触发该工作流。
 
