@@ -116,7 +116,10 @@ export async function fetchIndexRelease(fetchImpl = globalThis.fetch, { dshVersi
     // install: skip it rather than offering it.
     if (range !== undefined && typeof dshVersion === 'string' && semver.valid(dshVersion)
       && !semver.satisfies(dshVersion, range, { includePrerelease: true })) continue;
-    candidates.push({ version: version.version, dshRange: range ?? null, url, commit });
+    // A release tarball is the fallback channel for a network that blocks git.
+    const tgz = typeof version.tgz === 'string' && /^https:\/\/[^\s]+\.tgz$/u.test(version.tgz)
+      ? version.tgz : null;
+    candidates.push({ version: version.version, dshRange: range ?? null, url, commit, tgz });
   }
   if (candidates.length === 0) throw updateError('no-compatible-release');
   candidates.sort((left, right) => semver.rcompare(left.version, right.version));
@@ -126,6 +129,7 @@ export async function fetchIndexRelease(fetchImpl = globalThis.fetch, { dshVersi
     nodeRange: '*',
     dshRange: newest.dshRange,
     installSpec: `git+${newest.url}#${newest.commit}`,
+    tgzSpec: newest.tgz,
     source: 'index',
   };
 }
@@ -142,7 +146,7 @@ export async function fetchRelease(fetchImpl = globalThis.fetch, options = {}) {
   } catch (indexError) {
     try {
       const release = await fetchNpmRelease(fetchImpl, options.timeoutMs);
-      return { ...release, dshRange: null, installSpec: null, source: 'npm' };
+      return { ...release, dshRange: null, installSpec: null, tgzSpec: null, source: 'npm' };
     } catch {
       throw indexError;
     }
@@ -229,6 +233,9 @@ function publicJob(job) {
     ...(typeof previousVersion === 'string' ? { previousVersion } : {}),
     ...(Number.isFinite(startedAt) ? { startedAt } : {}),
     ...(Number.isFinite(updatedAt) ? { updatedAt } : {}),
+    // Which channel carried the install, and whether git was unreachable first.
+    ...(typeof job.installSource === 'string' ? { installSource: job.installSource } : {}),
+    ...(job.fellBack === true ? { fellBack: true } : {}),
     message,
     recoverable: job.recoverable === true,
   };
@@ -430,14 +437,61 @@ export function createUpdateService({
     unsavedJob = { statePath: paths.state, job: activeJob };
   }
 
+  /**
+   * Install one release through the channels the index offers, in the order the
+   * current installation suggests.
+   *
+   * A profile installed from a tarball prefers the tarball; anything else tries
+   * the git commit first and falls back to the tarball when git cannot reach the
+   * repository — the case for a network that resets github.com.
+   */
+  async function installRelease(job, originalEnvironment, signal) {
+    const gitSpec = typeof job.installSpec === 'string' && job.installSpec ? job.installSpec : null;
+    const tgzSpec = typeof job.tgzSpec === 'string' && job.tgzSpec ? job.tgzSpec : null;
+    const order = job.installChannel === 'tgz' && tgzSpec
+      ? [tgzSpec, gitSpec]
+      : [gitSpec, tgzSpec];
+    const attempts = order.filter((spec, index) => spec && order.indexOf(spec) === index);
+    if (attempts.length === 0) {
+      await runtime.install(job.targetVersion, { signal, expectedInstallationKey: originalEnvironment.installationKey });
+      return { spec: null, fallback: false };
+    }
+    let lastError;
+    for (const [index, spec] of attempts.entries()) {
+      try {
+        await runtime.install(job.targetVersion, {
+          signal,
+          expectedInstallationKey: originalEnvironment.installationKey,
+          spec,
+        });
+        return { spec, fallback: index > 0 };
+      } catch (error) {
+        lastError = error;
+        // Only a network-ish failure justifies the next channel: a version or
+        // state problem would fail the same way on the tarball.
+        const retryable = error?.code === 'install-failed' || error?.code === 'install-timeout';
+        if (!retryable || index === attempts.length - 1) throw error;
+        activeJob = { ...activeJob, message: 'install-channel-fallback', updatedAt: now() };
+        try { await writeJson(paths.state, activeJob); } catch { /* keep going; the install still decides */ }
+      }
+    }
+    throw lastError;
+  }
+
   async function execute(paths, job, originalEnvironment) {
     const deadline = AbortSignal.timeout(installTimeoutMs);
     try {
-      await runtime.install(job.targetVersion, {
-        signal: AbortSignal.any([abortController.signal, deadline]),
-        expectedInstallationKey: originalEnvironment.installationKey,
-        ...(typeof job.installSpec === 'string' && job.installSpec ? { spec: job.installSpec } : {}),
-      });
+      const installed = await installRelease(
+        job,
+        originalEnvironment,
+        AbortSignal.any([abortController.signal, deadline]),
+      );
+      activeJob = {
+        ...activeJob,
+        installSource: installed.spec === job.tgzSpec ? 'tgz' : installed.spec === job.installSpec ? 'git' : 'registry',
+        fellBack: installed.fallback,
+        updatedAt: now(),
+      };
       if (disposed) throw updateError('interrupted');
       activeJob = { ...activeJob, state: 'verifying', updatedAt: now() };
       await writeJson(paths.state, activeJob);
@@ -497,6 +551,8 @@ export function createUpdateService({
         packageName: PACKAGE_NAME,
         targetVersion: confirmation.release.version, previousVersion: environment.installedVersion,
         installSpec: confirmation.release.installSpec ?? null,
+        tgzSpec: confirmation.release.tgzSpec ?? null,
+        installChannel: environment.installChannel ?? null,
         startedAt: now(), updatedAt: now(),
       };
       let locked = false;

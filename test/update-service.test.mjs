@@ -831,3 +831,103 @@ test('a git install of this repository updates in place from the index commit', 
   assert.deepEqual(f.state.installs, ['3.0.8']);
   assert.deepEqual(f.state.specs, [`git+https://github.com/xdlg93/dsh-im.git#${f.state.commit}`]);
 });
+
+test('an install that cannot reach git falls back to the release tarball', async (t) => {
+  const f = await fixture(t, {
+    install: ({ version }) => { throw Object.assign(new Error('install-failed'), { code: 'install-failed' }); },
+  });
+  // Only the git attempt fails; the tarball succeeds.
+  f.state.commit = 'd'.repeat(40);
+  const calls = [];
+  const runtime = {
+    inspect: async () => ({ ...f.environment }),
+    install: async (version, { spec, expectedInstallationKey }) => {
+      calls.push(spec ?? null);
+      if (spec !== null && !String(spec).endsWith('.tgz')) {
+        throw Object.assign(new Error('install-failed'), { code: 'install-failed' });
+      }
+      f.environment.installedVersion = version;
+      f.environment.installationKey = 'new-installation';
+    },
+  };
+  const service = createUpdateService({
+    runtime,
+    runningVersion: '3.0.7',
+    nodeVersion: '22.20.0',
+    now: () => f.state.time,
+    fetchImpl: async (url) => {
+      if (url === RELEASE_INDEX_URL) {
+        return new Response(JSON.stringify({
+          format: 1,
+          plugins: [{
+            name: PACKAGE_NAME,
+            metadata: { keywords: [] },
+            versions: [{
+              version: '3.0.8',
+              publishTimestamp: 1,
+              source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: f.state.commit },
+              engines: { dsh: '^0.2.2-rc.5' },
+              tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
+            }],
+          }],
+        }));
+      }
+      throw new Error('unexpected fetch');
+    },
+  });
+  t.after(() => service.close());
+  const { checkId } = await service.check();
+  await service.install({ checkId, requestId: 'fallback' });
+  const finished = await waitForJob(service, 'restart-required');
+  assert.deepEqual(calls, [
+    `git+https://github.com/xdlg93/dsh-im.git#${f.state.commit}`,
+    'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
+  ]);
+  assert.equal(finished.job.installSource, 'tgz');
+  assert.equal(finished.job.fellBack, true);
+});
+
+test('a tarball install updates from the tarball first', async (t) => {
+  const f = await fixture(t, { environment: { installChannel: 'tgz' } });
+  const calls = [];
+  const runtime = {
+    inspect: async () => ({ ...f.environment }),
+    install: async (version, { spec }) => {
+      calls.push(spec ?? null);
+      f.environment.installedVersion = version;
+      f.environment.installationKey = 'new-installation';
+    },
+  };
+  const service = createUpdateService({
+    runtime,
+    runningVersion: '3.0.7',
+    nodeVersion: '22.20.0',
+    now: () => f.state.time,
+    fetchImpl: async (url) => {
+      if (url === RELEASE_INDEX_URL) {
+        return new Response(JSON.stringify({
+          format: 1,
+          plugins: [{
+            name: PACKAGE_NAME,
+            metadata: { keywords: [] },
+            versions: [{
+              version: '3.0.8',
+              publishTimestamp: 1,
+              source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: f.state.commit },
+              engines: { dsh: '^0.2.2-rc.5' },
+              tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
+            }],
+          }],
+        }));
+      }
+      throw new Error('unexpected fetch');
+    },
+  });
+  t.after(() => service.close());
+  const { checkId } = await service.check();
+  await service.install({ checkId, requestId: 'tgz-first' });
+  const finished = await waitForJob(service, 'restart-required');
+  assert.deepEqual(calls, ['https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz']);
+  assert.equal(finished.job.installSource, 'tgz');
+  assert.notEqual(finished.job.fellBack, true, 'the preferred channel needed no fallback');
+});

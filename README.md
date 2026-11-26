@@ -74,16 +74,16 @@ https://xdlg93.github.io/dsh-im/index.json
 **从 Git 安装**：在启动当前 Harness 的终端里执行，然后重启 `dsh web` 并刷新浏览器：
 
 ```sh
-dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.2
 ```
 
 **DSH Desktop**：在 Desktop 的内置终端中执行，然后完全退出并重新打开 Desktop：
 
 ```sh
-dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.1
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.2
 ```
 
-`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。把 `#v1.3.1`
+`dsh plugin` 的 `--profile` 必须写成当前实际运行的 profile 名；`install` 也可以写成 `add`。把 `#v1.3.2`
 换成需要的 tag（或省略它取 `main`）即可升级或回退。
 
 ### 网络受限时（git 需要直连 github.com）
@@ -116,7 +116,7 @@ git config --global http.proxy http://127.0.0.1:7890
 **3）用 tgz 直链安装**（不需要 git，也不需要 npm 账号，只访问 `xdlg93.github.io`）：
 
 ```sh
-dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz
+dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.2.tgz
 ```
 
 每个版本都会在 `docs/pkg/` 留一份 `dsh-im-<版本>.tgz`，地址规则相同。tgz 安装后插件内的「检查更新」仍按插件索引工作；

@@ -398,3 +398,18 @@ test('package validation rejects entry files escaping the installed package', as
   await json(join(f.installedDir, 'package.json'), metadata);
   assert.equal((await f.runtime().inspect()).packageValid, false);
 });
+
+test('the install channel follows the dependency spec', async () => {
+  const { installChannelOf } = await import('../plugin-src/host/update-runtime.mjs');
+  assert.equal(installChannelOf('^1.3.0'), 'registry');
+  assert.equal(installChannelOf('1.3.0'), 'registry');
+  assert.equal(installChannelOf('latest'), 'registry');
+  assert.equal(installChannelOf('git+https://github.com/xdlg93/dsh-im.git#v1.3.1'), 'git');
+  assert.equal(installChannelOf('https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz'), 'tgz');
+  // Local sources have no upstream, and a foreign git repository is not ours.
+  assert.equal(installChannelOf('link:/home/me/dsh-im'), 'local');
+  assert.equal(installChannelOf('file:../dsh-im'), 'local');
+  assert.equal(installChannelOf('/home/me/dsh-im'), 'local');
+  assert.equal(installChannelOf('git+https://github.com/other/dsh-im.git'), 'local');
+  assert.equal(installChannelOf('https://example.com/dsh-im.zip'), 'local');
+});

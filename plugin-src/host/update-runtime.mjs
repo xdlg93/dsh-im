@@ -11,6 +11,23 @@ export const NPM_REGISTRY = 'https://registry.npmjs.org/';
 export const REPOSITORY_URL = 'https://github.com/xdlg93/dsh-im';
 /** pnpm spec prefix for a repository dependency. */
 const GIT_SPEC = /^git\+(?:https|ssh):\/\//u;
+/** A release tarball served over HTTPS: the channel that needs no git and no registry. */
+const TGZ_SPEC = /^https:\/\/[^\s]+\.tgz$/u;
+
+/**
+ * How this profile installed the plugin: the channel an update should prefer.
+ *
+ * `registry` (a version range), `git` (this repository), `tgz` (a release tarball
+ * URL) or `local` (link, file, workspace) which cannot be replaced.
+ */
+export function installChannelOf(spec) {
+  if (typeof spec !== 'string' || spec.trim() === '') return 'registry';
+  const trimmed = spec.trim();
+  if (TGZ_SPEC.test(trimmed)) return 'tgz';
+  if (GIT_SPEC.test(trimmed)) return trimmed.includes(REPOSITORY_URL) ? 'git' : 'local';
+  if (/^(?:link|file|workspace):/u.test(trimmed) || isAbsolute(trimmed) || trimmed.startsWith('.')) return 'local';
+  return registrySpec(trimmed) ? 'registry' : 'local';
+}
 
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const CONFIG_TIMEOUT_MS = 10_000;
@@ -317,17 +334,18 @@ export function createUpdateRuntime(options = {}) {
         result[key] = runtime[key] ?? null;
       }
       result.dshVersion = runtime.dshVersion ?? null;
+      result.installChannel = null;
       if (!runtime.profileDir) return { ...result, blockedReason: runtime.blockedReason ?? 'unknown-profile' };
 
       const profile = await packageAt(runtime.profileDir);
       const installed = await packageAt(join(runtime.profileDir, 'node_modules', PACKAGE_NAME));
       const declaredSpec = profile.manifest.dependencies?.[PACKAGE_NAME];
-      // A git install of this repository is exactly what the plugin index
-      // publishes, so it can be updated in place. Only a local source (link,
-      // file, workspace) has no upstream to update from.
-      result.gitInstall = typeof declaredSpec === 'string'
-        && GIT_SPEC.test(declaredSpec) && declaredSpec.includes(REPOSITORY_URL);
-      result.sourceInstall = (!registrySpec(declaredSpec) && !result.gitInstall)
+      // A git install of this repository and a release tarball are both published
+      // by the plugin index, so either can be updated in place. Only a local
+      // source (link, file, workspace) has no upstream to update from.
+      result.installChannel = installChannelOf(declaredSpec);
+      result.gitInstall = result.installChannel === 'git';
+      result.sourceInstall = result.installChannel === 'local'
         || !inside(join(runtime.profileDir, 'node_modules'), installed.directory);
       result.installedVersion = typeof installed.manifest.version === 'string' ? installed.manifest.version : null;
       result.packageValid = await validPackage(installed);
@@ -370,7 +388,9 @@ export function createUpdateRuntime(options = {}) {
   async function install(version, { signal, expectedInstallationKey, spec } = {}) {
     if (semver.valid(version) !== version || semver.prerelease(version)) throw failure('invalid-version');
     const target = typeof spec === 'string' && spec.length > 0 ? spec : `${PACKAGE_NAME}@${version}`;
-    if (target !== `${PACKAGE_NAME}@${version}` && !GIT_SPEC.test(target)) throw failure('invalid-version');
+    if (target !== `${PACKAGE_NAME}@${version}` && !GIT_SPEC.test(target) && !TGZ_SPEC.test(target)) {
+      throw failure('invalid-version');
+    }
     const before = await inspect();
     if (expectedInstallationKey !== undefined && before.installationKey !== expectedInstallationKey) {
       throw failure('installation-changed');

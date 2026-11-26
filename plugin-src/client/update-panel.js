@@ -30,6 +30,7 @@ const ERROR_MESSAGES = Object.freeze({
   'installation-changed': '插件安装状态已发生变化，请重新检查。',
   'update-busy': '此 profile 正在更新，请稍后查看状态。',
   'install-failed': '安装失败。从插件索引安装需要用 git 访问 github.com：请给 DSH 进程设置 HTTPS_PROXY，或执行 git config --global http.proxy <代理地址> 后重试；也可以改用下方的 tgz 直链命令。',
+  'install-channel-fallback': '无法通过 git 获取更新，正在改用 tgz 直链。',
   'verify-failed': '安装结果校验失败，请手动检查插件版本。',
   'state-unavailable': '无法安全保存更新状态，请先检查当前安装结果。',
   interrupted: '上次更新已中断，请检查安装状态后重试。',
@@ -468,7 +469,10 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
             h('dt', null, '上次更新目标'), h('dd', null, `v${historicalTargetVersion}`)) : null,
           snapshot?.releaseSource ? h(React.Fragment, null,
             h('dt', null, '更新来源'),
-            h('dd', null, snapshot.releaseSource === 'index' ? '插件索引（git）' : 'npm')) : null,
+            h('dd', null, snapshot.releaseSource === 'index' ? '插件索引（git + tgz 兜底）' : 'npm')) : null,
+          snapshot?.job?.installSource ? h(React.Fragment, null,
+            h('dt', null, '安装方式'),
+            h('dd', null, snapshot.job.installSource === 'tgz' ? 'tgz 直链' : 'git')) : null,
           h('dt', null, '目标 profile'), h('dd', null, snapshot?.profileName ?? '无法确认')),
         h('div', {
           className: `dim-updateStatus${error || failedJob ? ' dim-updateStatusError' : ''}`,
@@ -482,6 +486,8 @@ export function UpdatePanel({ rpcCall, clientVersion, onStatus }) {
           elapsedSeconds !== null
             ? h('p', null, localizeTemplate('已用时 {seconds} 秒', { seconds: elapsedSeconds })) : null,
           restartRequired ? h('p', null, BLOCKED_REASONS['pending-restart']) : null,
+          snapshot?.job?.fellBack === true
+            ? h('p', null, 'git 不可达，本次已改用 tgz 直链安装。') : null,
           failedJob && jobMessage ? h('p', null,
             BLOCKED_REASONS[jobMessage] ?? ERROR_MESSAGES[jobMessage] ?? jobMessage) : null),
         error ? h('p', { className: 'dim-updateError', role: 'alert' }, error) : null,

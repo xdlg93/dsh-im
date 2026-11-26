@@ -45,6 +45,9 @@ versions.push({
     commit,
   },
   engines: { dsh: manifest.engines.dsh },
+  // Not part of format 1: the market drops it, and this plugin's own updater
+  // reads it as the fallback channel when git cannot reach github.com.
+  tgz: `https://xdlg93.github.io/dsh-im/pkg/dsh-im-${manifest.version}.tgz`,
 });
 // The market requires versions in descending SemVer precedence; a plain reverse
 // string sort is enough here because every entry shares the same shape.

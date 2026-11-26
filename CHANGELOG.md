@@ -4,6 +4,22 @@
 
 版本号遵循语义化版本；`1.0.0` 是本 fork 的起点，与上游 5.10.0 没有版本号对应关系。
 
+## 1.3.2 — 2026-11-26
+
+### 新增
+
+- **一键更新支持 tgz 兜底**：索引里每个版本现在除了 git commit 还带一个 `tgz` 直链（`docs/pkg/dsh-im-<版本>.tgz`，
+  市场解析器会忽略这个非标准字段，只有本插件的更新器读它）。更新时：
+  - 从 git 安装的 profile 先试 git，**失败后自动改用同版本的 tgz 直链**；
+  - 从 tgz 安装的 profile 直接用 tgz，不浪费一次 git 尝试；
+  - 只有网络类失败（`install-failed` / `install-timeout`）才切换通道，版本或状态问题仍然直接报错。
+- 面板新增「安装方式」一行（git / tgz 直链），切换通道时提示「git 不可达，本次已改用 tgz 直链安装」。
+
+### 变更
+
+- `update-runtime` 新增 `installChannelOf()`，把 profile 里的依赖声明归类为 registry / git / tgz / local，
+  `sourceInstall` 只对 local 生效（tgz 安装同样可以原地更新）。
+
 ## 1.3.1 — 2026-11-25
 
 ### 修复
