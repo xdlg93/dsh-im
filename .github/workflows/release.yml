@@ -47,3 +47,11 @@ jobs:
           if compgen -G "docs/pkg/*.tgz" >/dev/null; then
             gh release upload "$TAG" docs/pkg/*.tgz --clobber
           fi
+          # One canonical asset per release: drop anything else, such as a tarball
+          # uploaded by hand before this workflow existed.
+          CANONICAL="dsh-im-${TAG#v}.tgz"
+          while IFS= read -r asset; do
+            [ -z "$asset" ] && continue
+            [ "$asset" = "$CANONICAL" ] && continue
+            gh release delete-asset "$TAG" "$asset" --yes
+          done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
