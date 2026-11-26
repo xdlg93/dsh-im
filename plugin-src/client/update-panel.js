@@ -125,10 +125,15 @@ function manualUpdateCommand(snapshot) {
     ? [...targets, snapshot.runningVersion, snapshot.installedVersion]
       .filter(validVersion).sort(compareVersionsDescending)[0]
     : 'latest';
-  // This fork is published through git, so the manual fallback installs the tag.
-  const spec = version === 'latest'
-    ? 'git+https://github.com/xdlg93/dsh-im.git'
-    : `git+https://github.com/xdlg93/dsh-im.git#v${version}`;
+  // Prefer the release tarball: it needs neither git nor a registry, which is
+  // what a machine without git or behind a blocked github.com actually needs.
+  const tarball = typeof snapshot.latestTgz === 'string' && /\.tgz$/u.test(snapshot.latestTgz)
+    && snapshot.latestTgz === snapshot.latestTgz.trim() && !/[\u0000-\u001f\u007f]/u.test(snapshot.latestTgz)
+    ? snapshot.latestTgz : null;
+  const spec = tarball
+    ?? (version === 'latest'
+      ? 'git+https://github.com/xdlg93/dsh-im.git'
+      : `git+https://github.com/xdlg93/dsh-im.git#v${version}`);
   return `dsh plugin --profile ${profileArgument} add -w ${spec}`;
 }
 
@@ -189,6 +194,8 @@ function ManualUpdateCommand({ command, disabled, sourceInstall, desktop }) {
               h('path', { d: 'M5 13H3.5A1.5 1.5 0 0 1 2 11.5v-8A1.5 1.5 0 0 1 3.5 2h8A1.5 1.5 0 0 1 13 3.5V5' }))))),
       command.endsWith('dsh-im.git') ? h('p', { className: 'dim-updateManualHint' },
         '尚未确认目标版本，此命令安装仓库当前 main 的最新提交。') : null,
+      command.endsWith('.tgz') ? h('p', { className: 'dim-updateManualHint' },
+        '此命令直接下载安装包，不需要 git，也不需要访问 github.com。') : null,
       h('p', { className: 'dim-updateManualHint' }, desktop
         ? '请在当前 Desktop 的内置终端执行，完成后手动重启。'
         : '请在运行当前 Harness 的同一环境执行，保持 DSH_HOME 一致，完成后手动重启。'),

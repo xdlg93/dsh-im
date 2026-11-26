@@ -76,16 +76,16 @@ Then install "DSH IM bots (WeChat + QQ)" from the results. Until Pages is live, 
 **From Git** — run this in the terminal that starts your Harness, then restart `dsh web` and refresh the browser:
 
 ```sh
-dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.2
+dsh plugin --profile web install git+https://github.com/xdlg93/dsh-im.git#v1.3.3
 ```
 
 **DSH Desktop** — run this in Desktop's built-in terminal, then quit and reopen Desktop:
 
 ```sh
-dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.2
+dsh plugin --profile desktop install git+https://github.com/xdlg93/dsh-im.git#v1.3.3
 ```
 
-`--profile` must name the profile you actually run; `add` works as a synonym for `install`. Swap `#v1.3.2` for
+`--profile` must name the profile you actually run; `add` works as a synonym for `install`. Swap `#v1.3.3` for
 another tag (or drop it to follow `main`) to upgrade or roll back.
 
 ### When the network blocks github.com
@@ -119,7 +119,7 @@ git config --global http.proxy http://127.0.0.1:7890
 **3) Install from the release tarball** — no git, no npm account, only `xdlg93.github.io`:
 
 ```sh
-dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.2.tgz
+dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.3.tgz
 ```
 
 Every release leaves `docs/pkg/dsh-im-<version>.tgz` behind, and the URL follows the same rule. The plugin's

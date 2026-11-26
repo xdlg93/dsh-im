@@ -406,6 +406,7 @@ const EN = Object.freeze({
   '安装方式': 'Install channel',
   'tgz 直链': 'tgz download',
   'git 不可达，本次已改用 tgz 直链安装。': 'git was unreachable, so this update used the tgz download instead.',
+  '此命令直接下载安装包，不需要 git，也不需要访问 github.com。': 'This command downloads the release tarball directly; it needs neither git nor github.com.',
   '填入示例': 'Use example',
   '清空': 'Clear',
   '选择在哪些会话中启用、提供哪些来源字段，以及如何使用这些信息。仅使用已有消息元数据，不查询平台 API。': 'Choose which conversations to enhance, which source fields to include, and how to use them. Only existing message metadata is used; no platform APIs are queried.',

@@ -4,6 +4,22 @@
 
 版本号遵循语义化版本；`1.0.0` 是本 fork 的起点，与上游 5.10.0 没有版本号对应关系。
 
+## 1.3.3 — 2026-11-26
+
+### 修复
+
+- **手动更新命令改为 tgz 直链优先**：面板原来给的是 `git+https://github.com/...`，可它需要本机有 git，
+  并且要能访问 github.com——Desktop/Windows 用户常常根本没装 git，或代理只覆盖浏览器。现在索引里带
+  `tgz` 时，手动命令直接给
+  `dsh plugin --profile <profile> add -w https://xdlg93.github.io/dsh-im/pkg/dsh-im-<版本>.tgz`，
+  并注明「不需要 git，也不需要访问 github.com」；索引没有 tgz 时才回退到 git tag 形式。
+- 快照新增 `latestTgz`，面板据此决定手动命令与提示。
+
+### 说明
+
+- 已经停在 1.3.1 的 Desktop 用户，一键更新仍会失败一次（1.3.1 没有 tgz 兜底），用上面的 tgz 命令手动装到
+  1.3.2+ 之后，后续更新就会自动走 tgz 兜底。
+
 ## 1.3.2 — 2026-11-26
 
 ### 新增

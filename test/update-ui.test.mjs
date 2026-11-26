@@ -989,3 +989,22 @@ test('manual update instructions and copy feedback render in English', async (t)
   assert.match(textOf(renderer.toJSON()), /Command copied/);
   assert.doesNotMatch(textOf(renderer.toJSON()), /[\p{Script=Han}]/u);
 });
+
+test('the manual command prefers the release tarball when the index offers one', async (t) => {
+  const renderer = await mount(t, async () => ok(snapshot({
+    profileName: 'desktop', latestVersion: '3.0.9', checkedAt: 1_000, canInstall: true, checkId: 'c1',
+    latestTgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.9.tgz',
+  })));
+  await click(renderer, '更新至 v3.0.9');
+  assert.equal(manualCommandOf(renderer),
+    'dsh plugin --profile desktop add -w https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.9.tgz');
+  assert.match(textOf(renderer.toJSON()), /不需要 git/);
+});
+
+test('the manual command falls back to the git tag without a tarball', async (t) => {
+  const renderer = await mount(t, async () => ok(snapshot({
+    profileName: 'web', latestVersion: '3.0.9', checkedAt: 1_000,
+  })));
+  await click(renderer, '检查更新');
+  assert.match(manualCommandOf(renderer), /git\+https:\/\/github\.com\/xdlg93\/dsh-im\.git#v3\.0\.9$/);
+});

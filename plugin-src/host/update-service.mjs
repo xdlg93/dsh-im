@@ -357,6 +357,8 @@ export function createUpdateService({
       latestVersion: checked?.release.version ?? null,
       // Which channel answered the check, so the panel can name it.
       releaseSource: checked?.release.source ?? null,
+      // The no-git download for the newest release, when the index offers one.
+      latestTgz: checked?.release.tgzSpec ?? null,
       profileName: environment.profileName ?? null,
       environmentKind: environment.environmentKind ?? 'cli',
       // Preserve source protection even when restart/recovery takes status priority.
