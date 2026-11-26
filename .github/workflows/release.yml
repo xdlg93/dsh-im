@@ -1,5 +1,9 @@
 name: Release
 
+# A local DSH has no GitHub token, so the release is published by Actions: the
+# workflow's own GITHUB_TOKEN has contents:write, and `gh` is preinstalled on the
+# runner. Push a tag (or dispatch this workflow with an existing tag) and the
+# Release is created with the curated notes and the served tarball attached.
 on:
   push:
     tags:
@@ -7,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, for example v1.0.1
+        description: Existing tag to release, for example v1.3.2
         required: true
 
 permissions:
@@ -20,15 +24,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Pack the plugin
-        run: npm pack
+
       - name: Create or update the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
-          gh release upload "$TAG" ./*.tgz --clobber
+          set -euo pipefail
+          # docs/releases/<tag>.md is the curated body; without it, let GitHub
+          # generate notes from the commits.
+          if [ -f "docs/releases/${TAG}.md" ]; then
+            NOTES="--notes-file docs/releases/${TAG}.md"
+          else
+            NOTES="--generate-notes"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" $NOTES
+          else
+            gh release create "$TAG" --title "$TAG" $NOTES
+          fi
+          # The tarball the plugin index offers as its no-git channel.
+          if compgen -G "docs/pkg/*.tgz" >/dev/null; then
+            gh release upload "$TAG" docs/pkg/*.tgz --clobber
+          fi
