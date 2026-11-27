@@ -68,7 +68,8 @@ test('the Delivery tab loads, edits, and saves both switches, icons, and the lan
   const checkboxes = () => renderer.root.findAllByType('input').filter((input) => input.props.type === 'checkbox');
   const iconFields = () => renderer.root.findAllByType('input').filter((input) => input.props.type === 'text');
   const select = () => renderer.root.findByType('select');
-  assert.deepEqual(checkboxes().map((input) => input.props.checked), [false, true]);
+  // Two mirror switches, then the unattended-send switch, all off unless saved.
+  assert.deepEqual(checkboxes().map((input) => input.props.checked), [false, true, false]);
   assert.deepEqual(iconFields().map((input) => input.props.value), ['👤', '']);
   assert.equal(select().props.value, 'auto');
   assert.deepEqual(
@@ -77,6 +78,7 @@ test('the Delivery tab loads, edits, and saves both switches, icons, and the lan
   );
 
   await act(async () => checkboxes()[0].props.onChange({ target: { checked: true } }));
+  await act(async () => checkboxes()[2].props.onChange({ target: { checked: true } }));
   await act(async () => iconFields()[0].props.onChange({ target: { value: ' 🔔 ' } }));
   await act(async () => iconFields()[1].props.onChange({ target: { value: '🤖' } }));
   await act(async () => select().props.onChange({ target: { value: 'ru' } }));
@@ -90,6 +92,7 @@ test('the Delivery tab loads, edits, and saves both switches, icons, and the lan
       deliverModelAnswers: true,
       inputIcon: '🔔',
       modelIcon: '🤖',
+      allowUnattendedSend: true,
     },
   });
   assert.equal(renderer.root.findByProps({ role: 'status' }).children.join(''), '已保存');

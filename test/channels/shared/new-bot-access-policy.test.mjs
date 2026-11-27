@@ -83,27 +83,35 @@ for (const channel of ['qq']) {
       assert.equal(checkAccess(existingChatOnly, conversationType, 'other', '/status').reason, 'command-not-allowed');
     }
 
+    // A bot connected today starts closed: only the scanning account reaches it,
+    // and a stranger cannot run commands in either chat type.
     const freshBot = bot('new');
     bots.push(freshBot);
     const fresh = await connect(freshBot);
     const freshPolicy = fresh.getSettings();
     for (const conversationType of ['direct', 'group']) {
-      assert.equal(freshPolicy[conversationType].mode, 'open');
-      assert.deepEqual(checkAccess(fresh, conversationType, 'other', 'hello'),
-        { allowed: true, reason: 'allowed' });
-      assert.equal(freshPolicy[conversationType].open.defaultCanExecuteCommands, true);
-      assert.deepEqual(checkAccess(fresh, conversationType, 'other', '/status'),
-        { allowed: true, reason: 'allowed' });
+      assert.equal(freshPolicy[conversationType].mode, 'allowlist');
+      assert.equal(freshPolicy[conversationType].open.defaultCanExecuteCommands, false);
+      assert.equal(checkAccess(fresh, conversationType, 'other', 'hello').allowed, false);
+      assert.equal(checkAccess(fresh, conversationType, 'other', '/status').allowed, false);
+      assert.deepEqual(checkAccess(fresh, conversationType, 'owner', 'hello'),
+        { allowed: true, reason: 'privileged-sender' });
       assert.deepEqual(checkAccess(fresh, conversationType, 'owner', '/status'),
         { allowed: true, reason: 'privileged-sender' });
     }
 
+    // A legacy wildcard owner keeps the old reachability for chat, but commands
+    // stay closed and groups still require the allowlist.
     const manualBot = bot('manual', '*');
     bots.push(manualBot);
     const manual = await connect(manualBot);
-    for (const conversationType of ['direct', 'group']) {
-      assert.equal(checkAccess(manual, conversationType, 'other', '/status').allowed, true);
-    }
+    const manualPolicy = manual.getSettings();
+    assert.equal(manualPolicy.direct.mode, 'open');
+    assert.equal(manualPolicy.direct.open.defaultCanExecuteCommands, false);
+    assert.equal(checkAccess(manual, 'direct', 'other', 'hello').allowed, true);
+    assert.equal(checkAccess(manual, 'direct', 'other', '/status').allowed, false);
+    assert.equal(manualPolicy.group.mode, 'allowlist');
+    assert.equal(checkAccess(manual, 'group', 'other', 'hello').allowed, false);
 
     const customizedBot = bot('customized');
     bots.push(customizedBot);

@@ -502,6 +502,7 @@ export class QqHarnessBridge {
   #batchInputs = new BatchInputManager();
   #menus = new QqMenuStore();
   #menuTasks = new Map();
+  #workspaceRoots;
 
   constructor({
     bot,
@@ -517,6 +518,8 @@ export class QqHarnessBridge {
     signal,
     fetchImpl = fetch,
     fileUploadTimeoutMs = DEFAULT_FILE_UPLOAD_TIMEOUT_MS,
+    // Directories /workspace may switch to; empty means the plugin's own root.
+    workspaceRoots = [],
   }) {
     if (!bot || typeof bot.sendText !== 'function') throw new TypeError('QQ bot client is required');
     if (!ownerUserOpenid) throw new TypeError('QQ scanner identity is required');
@@ -536,6 +539,8 @@ export class QqHarnessBridge {
     this.#logger = logger;
     this.#replyTimeoutMs = replyTimeoutMs;
     this.#signal = signal;
+    this.#workspaceRoots = Object.freeze((Array.isArray(workspaceRoots) ? workspaceRoots : [])
+      .filter((path) => typeof path === 'string' && path.startsWith('/')));
     this.#deferred = createDeferredDeliveryCoordinator({ harness, state, signal, logger,
       finalAnswerOnly: true,
       deliver: (entry, outcome) => this.#deliverDeferredOutcome(entry, outcome),
@@ -1038,7 +1043,11 @@ export class QqHarnessBridge {
       if (isClearCommand(command)) return runClearCommand(command, this.#harness, this.#state, key, options);
       if (isResetCommand(command)) return runResetCommand(command, this.#harness, this.#state, key, options);
       if (command === '/compact') return runCompactCommand(command, this.#harness, this.#state, key, options);
-      return runWorkspaceCommand(command, this.#harness, key);
+      return runWorkspaceCommand(command, this.#harness, key, {
+        isOwner: this.#ownerUserOpenid !== '*'
+          && nonEmptyString(message.senderId) === this.#ownerUserOpenid,
+        workspaceRoots: this.#workspaceRoots,
+      });
     };
     // Stop/steer must stay available while a slower menu mutation is pending.
     if (isControlCommand(command)) return execute();
@@ -1071,6 +1080,10 @@ export class QqHarnessBridge {
     this.#status.lastMessageAt = new Date().toISOString();
     const result = await runner(text, this.#harness, this.#state, key, {
       signal: this.#signal,
+      // Command reachability is not the same as ownership: only the account that
+      // scanned the bot may change its preset or workspace.
+      isOwner: this.#ownerUserOpenid !== '*'
+        && nonEmptyString(message.senderId) === this.#ownerUserOpenid,
       isDirect: message.kind === 'c2c',
       hasImages: hasQqImageAttachments(message),
       hasFiles: hasQqFileAttachments(message),
@@ -1304,7 +1317,11 @@ export class QqHarnessBridge {
       }
       const workspaceCommand = hasImages || hasFiles
         ? null
-        : await runWorkspaceCommand(text, this.#harness, key);
+        : await runWorkspaceCommand(text, this.#harness, key, {
+            isOwner: this.#ownerUserOpenid !== '*'
+              && nonEmptyString(message.senderId) === this.#ownerUserOpenid,
+            workspaceRoots: this.#workspaceRoots,
+          });
       if (workspaceCommand) {
         for (const reply of workspaceCommand.messages ?? [workspaceCommand.message]) {
           await this.#bot.sendText(target, reply);

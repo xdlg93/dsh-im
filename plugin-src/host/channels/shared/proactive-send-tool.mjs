@@ -31,13 +31,80 @@ function targetSummary(botId, channel, target) {
   };
 }
 
-export function createProactiveSendTools({ deliveryService }) {
+/** Sends one Session may push per window, so a loop cannot flood a chat. */
+const SEND_BUDGET_PER_MINUTE = 3;
+const SEND_BUDGET_WINDOW_MS = 60_000;
+
+function sendBudget() {
+  const used = new Map();
+  return {
+    /** Record one send and report the remaining budget, or null when exhausted. */
+    take(sessionId, now = Date.now()) {
+      const key = typeof sessionId === 'string' && sessionId ? sessionId : 'unknown';
+      const entry = used.get(key);
+      if (!entry || now - entry.startedAt >= SEND_BUDGET_WINDOW_MS) {
+        used.set(key, { startedAt: now, count: 1 });
+        return SEND_BUDGET_PER_MINUTE - 1;
+      }
+      if (entry.count >= SEND_BUDGET_PER_MINUTE) return null;
+      entry.count += 1;
+      return SEND_BUDGET_PER_MINUTE - entry.count;
+    },
+  };
+}
+
+/**
+ * Ask the Host's approval service before a chat message leaves the machine.
+ *
+ * `allowed-once` is the only grant. Without an answerer the request is
+ * `unavailable`, and a send is refused rather than assumed: an injected prompt
+ * must not be able to push a message to the user's contacts on its own.
+ */
+async function approvedToSend(approval, exec, botId, targetId, text) {
+  // A Session without an answerer (a scheduled task, a headless run) may only
+  // send when the operator turned the unattended switch on.
+  if (!approval || typeof approval.request !== 'function') return { ok: false, code: 'approval-unavailable' };
+  if (!exec?.agent) return { ok: false, code: 'approval-unavailable' };
+  const preview = text.length > 200 ? `${text.slice(0, 200)}…` : text;
+  let outcome;
+  try {
+    outcome = await approval.request({
+      agent: exec.agent,
+      toolName: SEND_TOOL,
+      reason: `Send an IM message to ${botId}/${targetId}: ${preview}`,
+      signal: exec.signal,
+    });
+  } catch {
+    return { ok: false, code: 'approval-unavailable' };
+  }
+  return outcome === 'allowed-once' ? { ok: true } : { ok: false, code: `approval-${outcome ?? 'unavailable'}` };
+}
+
+/**
+ * Decide whether a Session that cannot ask for approval may still send.
+ *
+ * The switch is read per call, so toggling it in the settings page applies to the
+ * next message without a restart. A damaged document or a missing reader counts
+ * as off, which keeps the fail-closed default.
+ */
+async function unattendedAllowed(unattendedSend) {
+  if (typeof unattendedSend !== 'function') return false;
+  try {
+    return (await unattendedSend()) === true;
+  } catch {
+    return false;
+  }
+}
+
+export function createProactiveSendTools({ deliveryService, approval, unattendedSend } = {}) {
   if (!deliveryService
     || typeof deliveryService.listBots !== 'function'
     || typeof deliveryService.listTargets !== 'function'
     || typeof deliveryService.send !== 'function') {
     throw new TypeError('proactive send tools require the delivery service');
   }
+
+  const budget = sendBudget();
 
   const listTargets = async () => {
     const bots = await deliveryService.listBots();
@@ -83,10 +150,28 @@ export function createProactiveSendTools({ deliveryService }) {
         required: ['botId', 'targetId', 'text'],
       },
       output: textOutput,
-      execute: async ({ botId, targetId, text, format = 'plain' }) => {
+      execute: async ({ botId, targetId, text, format = 'plain' }, exec) => {
         if (typeof botId !== 'string' || !botId.trim()) throw deliveryError('bad-request', 'botId is required');
         if (typeof targetId !== 'string' || !targetId.trim()) throw deliveryError('bad-request', 'targetId is required');
         if (typeof text !== 'string' || !text.trim()) throw deliveryError('bad-request', 'text is required');
+        const sessionId = exec?.agent?.session?.id ?? null;
+        if (budget.take(sessionId) === null) {
+          throw deliveryError('rate-limited',
+            `At most ${SEND_BUDGET_PER_MINUTE} IM messages per minute per Session; tell the user instead of retrying.`);
+        }
+        const decision = await approvedToSend(approval, exec, botId.trim(), targetId.trim(), text);
+        if (!decision.ok) {
+          // An explicit refusal is final; only a Session with no answerer may
+          // fall back to the unattended switch.
+          const unattended = decision.code === 'approval-unavailable'
+            && await unattendedAllowed(unattendedSend);
+          if (!unattended) {
+            throw deliveryError(decision.code,
+              decision.code === 'approval-unavailable'
+                ? 'Sending needs an approval answerer, which this Session does not have. Tell the user the message was not sent; the delivery HTTP/RPC endpoint or the "allow unattended send" setting is the way to automate this.'
+                : 'The user did not approve this message, so it was not sent.');
+          }
+        }
         const result = await deliveryService.send(botId.trim(), targetId.trim(), text, {
           ...(format === 'markdown' ? { format } : {}),
         });
@@ -106,11 +191,11 @@ export function createProactiveSendTools({ deliveryService }) {
 }
 
 /** Register the proactive push tools and the prompt note that explains them. */
-export function installProactiveSendTools(ctx, { deliveryService } = {}) {
+export function installProactiveSendTools(ctx, { deliveryService, approval, unattendedSend } = {}) {
   if (typeof ctx?.tools?.register !== 'function') return false;
   let tools;
   try {
-    tools = createProactiveSendTools({ deliveryService });
+    tools = createProactiveSendTools({ deliveryService, approval, unattendedSend });
   } catch {
     return false;
   }

@@ -19,6 +19,10 @@ export const DEFAULT_DELIVERY_SYNC_SETTINGS = Object.freeze({
   deliverModelAnswers: false,
   inputIcon: '',
   modelIcon: '',
+  // Let a Session without an approval answerer (a scheduled task, a headless
+  // run) push through dsh_im_send without asking. Off by default: an injected
+  // prompt must not be able to message the user's contacts on its own.
+  allowUnattendedSend: false,
 });
 
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/u;
@@ -63,6 +67,10 @@ export function normalizeDeliverySyncSettings(value) {
     ),
     inputIcon: normalizeDeliverySyncIcon(value.inputIcon),
     modelIcon: normalizeDeliverySyncIcon(value.modelIcon),
+    allowUnattendedSend: booleanOr(
+      value.allowUnattendedSend,
+      DEFAULT_DELIVERY_SYNC_SETTINGS.allowUnattendedSend,
+    ),
   });
 }
 
@@ -94,6 +102,9 @@ export function applyDeliverySyncPatch(current, patch) {
   }
   if (Object.hasOwn(patch, 'deliverModelAnswers') && typeof patch.deliverModelAnswers === 'boolean') {
     next.deliverModelAnswers = patch.deliverModelAnswers;
+  }
+  if (Object.hasOwn(patch, 'allowUnattendedSend') && typeof patch.allowUnattendedSend === 'boolean') {
+    next.allowUnattendedSend = patch.allowUnattendedSend;
   }
   for (const field of ['inputIcon', 'modelIcon']) {
     if (Object.hasOwn(patch, field) && typeof patch[field] === 'string') {

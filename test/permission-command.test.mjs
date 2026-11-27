@@ -63,18 +63,34 @@ test('permission commands reject media and never create a missing session', asyn
   assert.equal(f.calls.length, 0);
 });
 
-test('numbered list is Host-owned and full access switches in one invocation', async () => {
+test('numbered list is Host-owned and the unrestricted preset is refused from chat', async () => {
   const f = fixture();
   const listed = await f.run('/permissionlist');
   assert.match(listed.message, /1\. workspace-write ✓ 当前/);
   assert.match(listed.message, /2\. danger-full-access — 完全文件访问，不再请求审批/);
+  // A chat message may never hand the sender the Host: the preset that disables
+  // the sandbox and the approval prompts stays a Web-side action.
+  const refused = await f.run('/permission 2', { pendingInteraction: true });
+  assert.match(refused.message, /不能切换到 danger-full-access/);
+  assert.equal(f.calls.length, 0);
+  // A safe preset still switches in one invocation; numbers follow the list.
+  f.catalog([{ value: 'workspace-write' }, { value: 'auto' }]);
+  await f.run('/permissionlist');
   const response = await f.run('/permission 2', { pendingInteraction: true });
-  assert.match(response.message, /已切换为：danger-full-access/);
-  assert.match(response.message, /恢复工作区权限/);
+  assert.match(response.message, /已切换为：auto/);
   assert.equal(f.calls.length, 1);
-  assert.equal(f.calls[0].line, '/permission danger-full-access');
+  assert.equal(f.calls[0].line, '/permission auto');
   assert.ok(f.calls[0].request.signal instanceof AbortSignal);
-  assert.match((await f.run('/permission')).message, /当前会话权限：danger-full-access/);
+});
+
+test('switching the preset requires the recorded owner', async () => {
+  const f = fixture();
+  await f.run('/permissionlist');
+  const refused = await f.run('/permission 1', { isOwner: false });
+  assert.match(refused.message, /只有机器人所有者/);
+  assert.equal(f.calls.length, 0);
+  // Viewing stays available to anyone the access policy lets run commands.
+  assert.match((await f.run('/permission', { isOwner: false })).message, /当前会话权限/);
 });
 
 test('a query reflects external changes without replacing the displayed number mapping', async () => {
@@ -83,11 +99,13 @@ test('a query reflects external changes without replacing the displayed number m
   f.catalog([{ value: 'auto' }, { value: 'workspace-write' }, { value: 'danger-full-access' }]);
   f.current('auto');
   assert.match((await f.run('/permission')).message, /当前会话权限：auto/);
-  await f.run('/permission 2');
-  assert.equal(f.calls[0].line, '/permission danger-full-access');
+  // The displayed number still maps to the listed preset, which is now refused.
+  assert.match((await f.run('/permission 2')).message, /不能切换到 danger-full-access/);
+  assert.equal(f.calls.length, 0);
+  // Re-listing re-maps the number to the safe preset the Host now offers.
   await f.run('/permissionlist');
   await f.run('/permission 2');
-  assert.equal(f.calls[1].line, '/permission workspace-write');
+  assert.equal(f.calls[0].line, '/permission workspace-write');
 });
 
 test('numeric selection requires the same bot, conversation and bound session', async () => {
@@ -117,9 +135,13 @@ test('expired lists and invalid numbers never invoke a mutation', async (t) => {
 test('removed presets are rejected by Host and never silently remapped', async () => {
   const f = fixture();
   await f.run('/permissionlist');
+  f.catalog([{ value: 'workspace-write' }, { value: 'MyPreset' }]);
+  await f.run('/permissionlist');
   f.catalog([{ value: 'workspace-write' }, { value: 'auto' }]);
+  // The number came from a stale list; the Host is asked and refuses it.
   assert.match((await f.run('/permission 2')).message, /不存在或已不可用/);
-  assert.equal(f.calls[0].line, '/permission danger-full-access');
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].line, '/permission MyPreset');
 });
 
 test('full and numeric IDs work without a list and preserve case', async () => {

@@ -328,6 +328,7 @@ export class WeixinHarnessBridge {
   #typingKeepaliveMs;
   /** Called with the sender id once an inbound message has reopened the session. */
   #onInboundMessage;
+  #workspaceRoots;
   #signal;
   #queues = new Map();
   #busyMessages = new BusyMessageDispatcher();
@@ -364,6 +365,8 @@ export class WeixinHarnessBridge {
     typingKeepaliveMs = DEFAULT_TYPING_KEEPALIVE_MS,
     signal,
     onInboundMessage = undefined,
+    // Directories /workspace may switch to; empty means the plugin's own root.
+    workspaceRoots = [],
   }) {
     if (!api || typeof api.sendText !== 'function') throw new TypeError('Weixin API is required');
     if (!baseUrl || !token || !ownerUserId) throw new TypeError('Weixin account credentials are required');
@@ -386,6 +389,8 @@ export class WeixinHarnessBridge {
     this.#typingKeepaliveMs = typingKeepaliveMs;
     this.#signal = signal;
     this.#onInboundMessage = typeof onInboundMessage === 'function' ? onInboundMessage : undefined;
+    this.#workspaceRoots = Object.freeze((Array.isArray(workspaceRoots) ? workspaceRoots : [])
+      .filter((path) => typeof path === 'string' && path.startsWith('/')));
     this.#deferred = createDeferredDeliveryCoordinator({ harness, state, signal, logger,
       deliver: (entry, outcome) => this.#deliverDeferredOutcome(entry, outcome),
     });
@@ -875,7 +880,12 @@ export class WeixinHarnessBridge {
       }
       const workspaceCommand = hasImages || hasFiles
         ? null
-        : await runWorkspaceCommand(text, this.#harness, key);
+        : await runWorkspaceCommand(text, this.#harness, key, {
+            // Only the account that scanned the bot may move its workspace or
+            // adopt another Session; everyone else keeps the default directory.
+            isOwner: sender === this.#ownerUserId,
+            workspaceRoots: this.#workspaceRoots,
+          });
       if (workspaceCommand) {
         for (const reply of workspaceCommand.messages ?? [workspaceCommand.message]) {
           await this.#send(sender, reply, contextToken, runId);

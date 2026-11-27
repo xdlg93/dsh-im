@@ -363,4 +363,26 @@ export default {
   '{name} 执行失败，请稍后重试。': '{name} failed; please try again later.',
   '当前机器人暂不支持 {name} 命令。': 'This bot does not support the {name} command yet.',
   '当前 Host 未注册 {name} 命令。': 'The current Host has not registered the {name} command.',
-};
+  '只有机器人所有者在私聊中才能切换权限档位。':
+    'Only the bot owner can change the permission preset, and only in a direct chat.',
+  'IM 通道不能切换到 danger-full-access（完全文件访问、免审批）。请在 Web 设置里操作。':
+    'A chat cannot switch to danger-full-access (full file access, no approval prompts). Use the Web settings instead.',
+  '只有机器人所有者才能切换工作区。':
+    'Only the bot owner can switch the workspace.',
+  '工作区必须是绝对路径。':
+    'The workspace must be an absolute path.',
+  '不能把系统目录设为工作区。':
+    'A system directory cannot be used as a workspace.',
+  '工作区路径不能包含 ..。':
+    'The workspace path must not contain "..".',
+  '只能在已注册的 DSH 工作区之间切换；请先在 Web 端把该目录添加为工作区。':
+    'Only registered DSH workspaces can be used; add that directory as a workspace in the Web UI first.',
+  '跨工作区列出会话仅机器人所有者可用；去掉 --all 只列当前工作区。':
+    'Listing Sessions across workspaces is owner-only; drop --all to list the current workspace.',
+  '只有机器人所有者才能绑定已有会话。':
+    'Only the bot owner can bind an existing Session.',
+  '结果文件「{name}」不在当前会话工作区内，未发送；请把文件放到工作区后再发。':
+    'The file "{name}" is outside the Session workspace, so it was not sent; move it into the workspace first.',
+  '结果文件「{name}」看起来是凭据或密钥文件，已拒绝发送。':
+    'The file "{name}" looks like a credential or key file, so sending it was refused.',
+  };

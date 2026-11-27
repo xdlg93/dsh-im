@@ -212,6 +212,7 @@ export class WeixinRuntime {
         // A fresh inbound message reopens the conversation session, which is the
         // only moment a queued proactive message can be delivered.
         onInboundMessage: (sender) => { void this.flushOutbox(sender); },
+        workspaceRoots: this.#config.workspaceRoots ?? [],
       });
       this.#status.ready = true;
       this.#status.weixinConnectionState = 'connected';

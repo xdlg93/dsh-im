@@ -87,6 +87,11 @@ export async function createProductionController(ctx, config = {}, internals = {
   const Runtime = internals.Runtime ?? WeixinRuntime;
   let uploadDispatcher;
   const api = internals.api ?? createWeixinApi({
+    // The announced client id is configurable: a platform policy change should
+    // not require a code change.
+    ...(typeof config.botAgent === 'string' && config.botAgent.trim()
+      ? { botAgent: config.botAgent.trim() }
+      : {}),
     uploadFetchImpl: (url, options) => {
       // Keep CDN response headers independent of the host's global dispatcher.
       uploadDispatcher ??= new EnvHttpProxyAgent();

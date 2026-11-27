@@ -38,6 +38,9 @@ test('the shipped defaults mirror nothing at all', () => {
     deliverModelAnswers: false,
     inputIcon: '',
     modelIcon: '',
+    // A Session with no approval answerer must not push unless the operator
+    // turns this on.
+    allowUnattendedSend: false,
   });
 });
 
@@ -70,7 +73,10 @@ test('a settings body keeps known fields and fills the rest from the defaults', 
 });
 
 test('a partial patch applies only the fields it carries', () => {
-  const current = { mirrorUserInput: true, deliverModelAnswers: false, inputIcon: '👤', modelIcon: '🤖' };
+  const current = {
+    mirrorUserInput: true, deliverModelAnswers: false, inputIcon: '👤', modelIcon: '🤖',
+    allowUnattendedSend: false,
+  };
   assert.deepEqual({ ...applyDeliverySyncPatch(current, { modelIcon: '' }) }, {
     ...current,
     modelIcon: '',
@@ -109,6 +115,7 @@ test('the store writes the document atomically and reads it back', async (t) => 
       deliverModelAnswers: false,
       inputIcon: '👤',
       modelIcon: '',
+      allowUnattendedSend: false,
     },
   });
   assert.equal((await stat(path)).mode & 0o777, 0o600);
@@ -159,7 +166,10 @@ test('the RPC validates get and set payloads', () => {
   assert.equal(validDeliverySyncPayload(DELIVERY_SYNC_ENDPOINTS.set, { mirrorUserInput: true }), true);
   assert.equal(validDeliverySyncPayload(DELIVERY_SYNC_ENDPOINTS.set, {
     mirrorUserInput: true, deliverModelAnswers: false, inputIcon: '👤', modelIcon: '🤖',
+    allowUnattendedSend: true,
   }), true);
+  // The unattended switch must be a boolean like the other two.
+  assert.equal(validDeliverySyncPayload(DELIVERY_SYNC_ENDPOINTS.set, { allowUnattendedSend: 'yes' }), false);
   // An unusable icon is still a string: the store normalizes it to no prefix.
   assert.equal(validDeliverySyncPayload(DELIVERY_SYNC_ENDPOINTS.set, { modelIcon: 'x'.repeat(40) }), true);
 

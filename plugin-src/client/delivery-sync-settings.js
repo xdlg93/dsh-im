@@ -165,6 +165,21 @@ export function DeliverySyncSettings({ rpcCall, languageRpcCall = null }) {
     },
   ];
 
+  const unattendedField = h('div', { className: 'dim-deliverySyncField' },
+    h('div', { className: 'dim-deliverySyncLabel' },
+      h('label', { className: 'dim-deliverySyncCheckLabel', htmlFor: `${id}-allowUnattendedSend` },
+        h('input', {
+          id: `${id}-allowUnattendedSend`,
+          type: 'checkbox',
+          checked: values.allowUnattendedSend === true,
+          disabled,
+          'aria-describedby': `${id}-allowUnattendedSend-help`,
+          onChange: (event) => edit({ allowUnattendedSend: event.target.checked }),
+        }),
+        h('span', null, '允许无人值守会话直接推送')),
+      h('p', { className: 'dim-deliverySyncHelp', id: `${id}-allowUnattendedSend-help` },
+        '定时任务等没有审批应答方的会话，可以不经审批直接调用 dsh_im_send 推送；每个会话仍限每分钟 3 条。用户明确拒绝的审批永远不会发送。')));
+
   const helpId = `${id}-help`;
 
   const head = h('div', { className: 'dim-globalHead' },
@@ -253,7 +268,7 @@ export function DeliverySyncSettings({ rpcCall, languageRpcCall = null }) {
   },
   head,
   h('form', { onSubmit: save },
-    h('div', { className: 'dim-deliverySyncFields' }, languageField, ...iconFields),
+    h('div', { className: 'dim-deliverySyncFields' }, languageField, ...iconFields, unattendedField),
     actions),
   error
     ? h('p', {

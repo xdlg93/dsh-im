@@ -14,6 +14,7 @@ import { installInboundTtlRpc } from './inbound-ttl-rpc.mjs';
 import { installDeliverySyncRpc } from './delivery-sync-rpc.mjs';
 import { installSidebarSettingsRpc } from './sidebar-settings.mjs';
 import { installInjectedContext } from './injected-context.mjs';
+import { serviceOf } from '../../src/channels/shared/default-workspace.mjs';
 import { installSessionSyncCoordinator } from './session-sync-coordinator.mjs';
 import { deliverySwitchesOff } from '../../src/channels/shared/delivery-sync-settings.mjs';
 import { getDeliverySyncSettingsStore } from '../../src/channels/shared/delivery-sync-settings-store.mjs';
@@ -31,6 +32,8 @@ export const inject = [
   // plugin has to read the Host's Workspace list. Reading it through ctx.get()
   // only answers for a service this fiber injected, which is why it is declared.
   'workspaceRegistry',
+  // Proactive sends ask the user before a message leaves the machine.
+  'approval',
 ];
 
 function channelConfig(config, name, deliveryService) {
@@ -166,18 +169,29 @@ export function createImHostPlugin(internals = {}) {
     } else if (ctx?.sessions && typeof ctx.on === 'function') {
       startTitlePrefix(ctx);
     }
+    const approval = serviceOf(ctx, 'approval');
+    // Read per send so the settings toggle applies without a restart.
+    const unattendedSend = async () => {
+      if (config.allowUnattendedSend === true) return true;
+      try {
+        const settings = await getDeliverySyncSettingsStore(config).get();
+        return settings?.allowUnattendedSend === true;
+      } catch {
+        return false;
+      }
+    };
     if (typeof ctx?.inject === 'function') {
       ctx.inject(['tools', 'systemPrompt'], (artifactCtx) => {
         installOutboundArtifactTool(artifactCtx);
         installGroupHistoryTools(artifactCtx);
         // Proactive push needs the delivery service built above, so it is
         // registered here rather than at plugin construction.
-        installProactiveSendTools(artifactCtx, { deliveryService });
+        installProactiveSendTools(artifactCtx, { deliveryService, approval, unattendedSend });
       });
     } else {
       installOutboundArtifactTool(ctx);
       installGroupHistoryTools(ctx);
-      installProactiveSendTools(ctx, { deliveryService });
+      installProactiveSendTools(ctx, { deliveryService, approval, unattendedSend });
     }
     const logger = typeof ctx?.logger === 'function'
       ? ctx.logger(name)

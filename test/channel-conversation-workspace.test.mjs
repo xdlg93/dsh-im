@@ -160,8 +160,9 @@ test('QQ rejects an actor\'s old session menu after another group actor changes 
       async send(message) { sent.push(message); return { id: `reply-${sent.length}` }; },
       async sendText(_target, text) { sent.push({ content: text }); return { id: `reply-${sent.length}` }; },
     },
-    ownerUserOpenid: '*', harness: f.harness, state: f.state, accessPolicy: policy,
+    ownerUserOpenid: 'owner', harness: f.harness, state: f.state, accessPolicy: policy,
     logger: { warn() {}, error() {} },
+    workspaceRoots: [f.workspaceA, f.workspaceB, f.defaultWorkspace, f.alternateWorkspace].filter(Boolean),
   });
   let sequence = 0;
   const send = async (content, senderId = 'owner') => {

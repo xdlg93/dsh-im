@@ -44,14 +44,20 @@ const policy = (direct = open(), group = open()) => ({ direct, group });
 test('Host initialization preserves each channel access baseline', () => {
   assert.deepEqual(initialAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }),
     policy(allowlist(), allowlist()));
+  // Both QQ chat types start closed to strangers: a chat window reaches the
+  // Host's shell, so reachability is opt-in.
   assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }),
-    policy(allowlist(), open()));
-  assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: '*' }), policy());
+    policy(allowlist(), allowlist()));
+  // The legacy wildcard owner keeps chat reachability without command execution.
+  assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: '*' }),
+    policy(open([], false), allowlist()));
 });
 
-test('new QQ bots open messages and commands for QR and manual binding', () => {
-  assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }), policy());
-  assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: '*' }), policy());
+test('new bots start closed on both channels, for QR and manual binding alike', () => {
+  assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }),
+    policy(allowlist(), allowlist()));
+  assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: '*' }),
+    policy(open([], false), allowlist()));
   assert.deepEqual(newBotAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }),
     initialAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }));
 });

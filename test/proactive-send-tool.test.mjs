@@ -6,6 +6,18 @@ import {
   installProactiveSendTools,
 } from '../plugin-src/host/channels/shared/proactive-send-tool.mjs';
 
+function fakeApproval(outcome = 'allowed-once') {
+  const asked = [];
+  return {
+    asked,
+    request: async (req) => { asked.push(req); return outcome; },
+  };
+}
+
+function execution(sessionId = 'session-1') {
+  return { agent: { session: { id: sessionId } }, signal: new AbortController().signal };
+}
+
 function fakeDelivery({ queued = false } = {}) {
   const sends = [];
   return {
@@ -33,18 +45,25 @@ test('the target tool lists every account with its channel and route', async () 
   assert.equal(result.targets[1].kind, 'group');
 });
 
-test('the send tool reports a delivered message', async () => {
+test('the send tool reports a delivered message after the user approves', async () => {
   const service = fakeDelivery();
-  const [, send] = createProactiveSendTools({ deliveryService: service });
+  const approval = fakeApproval();
+  const [, send] = createProactiveSendTools({ deliveryService: service, approval });
   assert.equal(send.name, 'dsh_im_send');
-  const result = await send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, {});
+  const result = await send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, execution());
+  assert.equal(approval.asked.length, 1);
+  assert.equal(approval.asked[0].toolName, 'dsh_im_send');
+  assert.match(approval.asked[0].reason, /qq-1\/t2/);
   assert.deepEqual(result, { delivered: true, queued: false });
   assert.deepEqual(service.sends[0], { botId: 'qq-1', targetId: 't2', text: 'hi', options: {} });
 });
 
 test('the send tool reports a queued WeChat message instead of claiming delivery', async () => {
-  const [, send] = createProactiveSendTools({ deliveryService: fakeDelivery({ queued: true }) });
-  const result = await send.execute({ botId: 'wx-1', targetId: 't1', text: 'later' }, {});
+  const [, send] = createProactiveSendTools({
+    deliveryService: fakeDelivery({ queued: true }),
+    approval: fakeApproval(),
+  });
+  const result = await send.execute({ botId: 'wx-1', targetId: 't1', text: 'later' }, execution());
   assert.equal(result.delivered, false);
   assert.equal(result.queued, true);
   assert.equal(result.reason, 'session-timeout');
@@ -70,4 +89,73 @@ test('installing without a usable delivery service registers nothing', () => {
   assert.deepEqual(registered, []);
   assert.equal(installProactiveSendTools(ctx, { deliveryService: fakeDelivery() }), true);
   assert.deepEqual(registered, ['dsh_im_targets', 'dsh_im_send']);
+});
+
+test('a send the user did not approve never reaches the channel', async () => {
+  for (const outcome of ['denied', 'cancelled', 'unavailable']) {
+    const service = fakeDelivery();
+    const [, send] = createProactiveSendTools({
+      deliveryService: service,
+      approval: fakeApproval(outcome),
+    });
+    await assert.rejects(send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, execution()),
+      { code: `approval-${outcome}` });
+    assert.equal(service.sends.length, 0);
+  }
+});
+
+test('a Session without an approval answerer cannot push messages', async () => {
+  const service = fakeDelivery();
+  const [, send] = createProactiveSendTools({ deliveryService: service });
+  await assert.rejects(send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, execution()),
+    { code: 'approval-unavailable' });
+  assert.equal(service.sends.length, 0);
+});
+
+test('one Session may push at most three messages a minute', async () => {
+  const service = fakeDelivery();
+  const [, send] = createProactiveSendTools({ deliveryService: service, approval: fakeApproval() });
+  for (const text of ['one', 'two', 'three']) {
+    await send.execute({ botId: 'qq-1', targetId: 't2', text }, execution());
+  }
+  await assert.rejects(send.execute({ botId: 'qq-1', targetId: 't2', text: 'four' }, execution()),
+    { code: 'rate-limited' });
+  assert.equal(service.sends.length, 3);
+  // Another Session has its own budget.
+  await send.execute({ botId: 'qq-1', targetId: 't2', text: 'other' }, execution('session-2'));
+  assert.equal(service.sends.length, 4);
+});
+
+test('the unattended switch lets a Session without an answerer push', async () => {
+  const service = fakeDelivery();
+  const [, send] = createProactiveSendTools({
+    deliveryService: service,
+    unattendedSend: async () => true,
+  });
+  const result = await send.execute({ botId: 'qq-1', targetId: 't2', text: 'scheduled' }, execution());
+  assert.deepEqual(result, { delivered: true, queued: false });
+  assert.equal(service.sends.length, 1);
+});
+
+test('the unattended switch never overrides an explicit refusal', async () => {
+  const service = fakeDelivery();
+  const [, send] = createProactiveSendTools({
+    deliveryService: service,
+    approval: fakeApproval('denied'),
+    unattendedSend: async () => true,
+  });
+  await assert.rejects(send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, execution()),
+    { code: 'approval-denied' });
+  assert.equal(service.sends.length, 0);
+});
+
+test('an unreadable unattended setting stays closed', async () => {
+  const service = fakeDelivery();
+  const [, send] = createProactiveSendTools({
+    deliveryService: service,
+    unattendedSend: async () => { throw new Error('damaged document'); },
+  });
+  await assert.rejects(send.execute({ botId: 'qq-1', targetId: 't2', text: 'hi' }, execution()),
+    { code: 'approval-unavailable' });
+  assert.equal(service.sends.length, 0);
 });

@@ -19,7 +19,7 @@ export const DELIVERY_SYNC_ENDPOINTS = Object.freeze({
 
 const ENDPOINTS = new Set(Object.values(DELIVERY_SYNC_ENDPOINTS));
 
-const BOOLEAN_FIELDS = new Set(['mirrorUserInput', 'deliverModelAnswers']);
+const BOOLEAN_FIELDS = new Set(['mirrorUserInput', 'deliverModelAnswers', 'allowUnattendedSend']);
 const ICON_FIELDS = new Set(['inputIcon', 'modelIcon']);
 
 /**

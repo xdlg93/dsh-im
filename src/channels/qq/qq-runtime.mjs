@@ -200,6 +200,7 @@ export class QqRuntime {
       logger: this.#logger,
       replyTimeoutMs: this.#replyTimeoutMs,
       signal: controller.signal,
+      workspaceRoots: this.#config.workspaceRoots ?? [],
     });
     const botMentionIds = new Set([this.#config.appId]);
     bot.use(async (ctx, next) => {

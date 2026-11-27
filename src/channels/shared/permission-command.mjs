@@ -125,6 +125,16 @@ export async function runPermissionCommand(text, harness, state, key, options = 
         selected = snapshot.ids[index - 1];
       }
       if (selected === 'custom' || /^id:/iu.test(selected)) return result(t(USAGE));
+      // A chat window reaches the Host's shell: switching the preset from a
+      // message would let anyone in that chat hand themselves the Host.
+      // Channels pass an explicit owner flag; a caller that omits it is an
+      // in-process or test caller that already holds the Host's authority.
+      if (options.isOwner === false) return result(t('只有机器人所有者在私聊中才能切换权限档位。'));
+      // The unrestricted preset disables the sandbox and the approval prompts, so
+      // it stays a deliberate action on the Web side, never a chat command.
+      if (selected === 'danger-full-access') {
+        return result(t('IM 通道不能切换到 danger-full-access（完全文件访问、免审批）。请在 Web 设置里操作。'));
+      }
       if (typeof session?.executeCommand !== 'function') return result(t('当前 Host 暂不支持从机器人查看或切换权限档位。'));
       signal.throwIfAborted();
       writing = true;
@@ -141,7 +151,6 @@ export async function runPermissionCommand(text, harness, state, key, options = 
       }
       return result([
         t('当前会话权限已切换为：{id}', { id: selected }), '', t(SCOPE),
-        ...(selected === 'danger-full-access' ? [t('恢复工作区权限：/permission workspace-write（需 Host 支持该档位）')] : []),
       ].join('\n'));
     });
   } catch (error) {

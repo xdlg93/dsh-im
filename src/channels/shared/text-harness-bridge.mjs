@@ -129,6 +129,10 @@ function artifactFailureText(fileName, error) {
       return t('结果文件「{name}」的发送结果未能确认，请先检查聊天内是否已收到，不要立即重试。', { name });
     case 'artifact-permission-required':
       return t('结果文件「{name}」已生成，但当前机器人没有文件发送权限，请检查渠道权限。', { name });
+    case 'artifact-outside-workspace':
+      return t('结果文件「{name}」不在当前会话工作区内，未发送；请把文件放到工作区后再发。', { name });
+    case 'artifact-sensitive-path':
+      return t('结果文件「{name}」看起来是凭据或密钥文件，已拒绝发送。', { name });
     case 'artifact-too-large':
       return t('结果文件「{name}」超过当前渠道大小上限，未发送。', { name });
     case 'artifact-empty':
@@ -234,6 +238,7 @@ export class TextHarnessBridge {
   #autoSteerSameSender = false;
   #autoSteerLimit = 0;
   #coalesceWindowMs = 0;
+  #workspaceRoots;
 
   constructor({
     descriptor,
@@ -256,6 +261,9 @@ export class TextHarnessBridge {
     autoSteerSameSender = false,
     autoSteerLimit = 0,
     coalesceWindowMs = 0,
+    // Directories /workspace may switch to. Empty means the channel cannot
+    // verify a directory, so the shared command refuses the switch.
+    workspaceRoots = [],
   }) {
     if (!descriptor?.key || !descriptor?.label) throw new TypeError('A channel descriptor is required');
     if (!bot || typeof bot.sendText !== 'function') throw new TypeError('A bot client is required');
@@ -287,6 +295,8 @@ export class TextHarnessBridge {
     this.#coalesceWindowMs = Number.isSafeInteger(coalesceWindowMs) && coalesceWindowMs > 0
       ? Math.min(coalesceWindowMs, 3_000)
       : 0;
+    this.#workspaceRoots = Object.freeze((Array.isArray(workspaceRoots) ? workspaceRoots : [])
+      .filter((path) => typeof path === 'string' && path.startsWith('/')));
     // Channel-supplied conversation context pipeline (collect/render/consume/deliver).
     // Channels own what context means and how it is framed; the bridge only runs
     // the steps at the right points of one turn, so every hook is optional and a
@@ -1154,7 +1164,12 @@ export class TextHarnessBridge {
         return;
       }
       const workspaceCommand = !hasImages && !hasFiles
-        ? await runWorkspaceCommand(text, this.#harness, conversationKey)
+        ? await runWorkspaceCommand(text, this.#harness, conversationKey, {
+            isOwner: this.#accessPolicy?.isPrivileged?.(
+              message.senderId, message.kind === 'group' ? 'group' : 'direct',
+            ) === true,
+            workspaceRoots: this.#workspaceRoots,
+          })
         : null;
       if (workspaceCommand && await this.#presentWorkspaceCommand(
         target, workspaceCommand, conversationKey,

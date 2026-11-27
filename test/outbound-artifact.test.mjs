@@ -148,44 +148,60 @@ test('an existing file can be sent directly without recreation', async (t) => {
   releaseOutboundArtifact(artifact);
 });
 
-test('absolute outside-workspace paths and symbolic links are delivered normally', async (t) => {
+test('a file outside the workspace is refused, even through a symlink', async (t) => {
   const fx = await fixture(t);
   const outsidePath = join(fx.outside, 'outside.txt');
   await writeFile(outsidePath, 'outside content');
   if (!await symlinkOrSkip(t, outsidePath, join(fx.workspace, 'linked.txt'))) return;
   const tool = createOutboundArtifactTool({ registry: fx.registry });
 
-  await execute(tool, { path: outsidePath }, execution(fx.agent, 'outside'));
-  await execute(tool, { path: 'linked.txt' }, execution(fx.agent, 'linked'));
+  // A delivered file leaves the machine, so only the workspace may provide one.
+  await assert.rejects(execute(tool, { path: outsidePath }, execution(fx.agent, 'outside')),
+    { code: 'artifact-outside-workspace' });
+  // The symlink is inside the workspace, but its target is not.
+  await assert.rejects(execute(tool, { path: 'linked.txt' }, execution(fx.agent, 'linked')),
+    { code: 'artifact-outside-workspace' });
+  assert.equal(fx.registry.take('session-artifact', 7).length, 0);
+});
 
+test('a symlink inside the workspace still delivers its target', async (t) => {
+  const fx = await fixture(t);
+  await writeFile(join(fx.workspace, 'real.txt'), 'real content');
+  if (!await symlinkOrSkip(t, join(fx.workspace, 'real.txt'), join(fx.workspace, 'inside-link.txt'))) return;
+  const tool = createOutboundArtifactTool({ registry: fx.registry });
+  await execute(tool, { path: 'inside-link.txt' }, execution(fx.agent, 'inside'));
   const artifacts = fx.registry.take('session-artifact', 7);
-  assert.equal(artifacts.length, 2);
-  const files = await Promise.all(artifacts.map((artifact) => materializeOutboundArtifact(artifact)));
-  assert.deepEqual(files.map((file) => file.fileName), ['outside.txt', 'linked.txt']);
-  assert.deepEqual(files.map((file) => file.bytes.toString()), ['outside content', 'outside content']);
+  assert.equal(artifacts.length, 1);
+  const [file] = await Promise.all(artifacts.map((artifact) => materializeOutboundArtifact(artifact)));
+  assert.equal(file.bytes.toString(), 'real content');
   for (const artifact of artifacts) releaseOutboundArtifact(artifact);
 });
 
-test('empty, sensitive-looking, and extension-mismatched files are not filtered', async (t) => {
+test('empty and extension-mismatched files are delivered; credentials are not', async (t) => {
   const fx = await fixture(t);
   await writeFile(join(fx.workspace, 'empty.txt'), '');
   await writeFile(
     join(fx.workspace, '.env'),
     'PASSWORD=example\n-----BEGIN PRIVATE KEY-----\nexample\n',
   );
+  await writeFile(join(fx.workspace, 'id_rsa'), 'key material');
   await writeFile(join(fx.workspace, 'plain.png'), 'not a PNG signature');
   const tool = createOutboundArtifactTool({ registry: fx.registry });
 
   await execute(tool, { path: 'empty.txt' }, execution(fx.agent, 'empty'));
-  await execute(tool, { path: '.env' }, execution(fx.agent, 'sensitive-looking'));
+  // Credential-shaped names are refused even inside the workspace.
+  await assert.rejects(execute(tool, { path: '.env' }, execution(fx.agent, 'sensitive-looking')),
+    { code: 'artifact-sensitive-path' });
+  await assert.rejects(execute(tool, { path: 'id_rsa' }, execution(fx.agent, 'private-key')),
+    { code: 'artifact-sensitive-path' });
   await execute(tool, { path: 'plain.png' }, execution(fx.agent, 'extension-mismatch'));
 
   const artifacts = fx.registry.take('session-artifact', 7);
-  assert.equal(artifacts.length, 3);
+  assert.equal(artifacts.length, 2);
   const files = await Promise.all(artifacts.map((artifact) => materializeOutboundArtifact(artifact)));
-  assert.deepEqual(files.map((file) => file.size), [0, 53, 19]);
-  assert.equal(files[1].bytes.toString().startsWith('PASSWORD='), true);
-  assert.equal(files[2].bytes.toString(), 'not a PNG signature');
+  assert.deepEqual(files.map((file) => file.size), [0, 19]);
+  assert.equal(files[0].bytes.length, 0);
+  assert.equal(files[1].bytes.toString(), 'not a PNG signature');
   for (const artifact of artifacts) releaseOutboundArtifact(artifact);
 });
 

@@ -562,9 +562,14 @@ async function allWorkspacesSessionListing(harness, limit, conversationKey, { in
   return commandResult(message, splitWorkspaceCommandMessage(message));
 }
 
-async function runSessionListCommand(match, harness, conversationKey) {
+async function runSessionListCommand(match, harness, conversationKey, access = workspaceCommandAccess()) {
   const request = parseSessionListArgument(match[1]);
   if (request.error) return commandResult(request.error);
+  // --all enumerates every Session of this Host, including other people's
+  // conversations: only the account that scanned the bot may see that.
+  if (request.all && access.isOwner !== true) {
+    return commandResult(t('跨工作区列出会话仅机器人所有者可用；去掉 --all 只列当前工作区。'));
+  }
   if (typeof harness?.listWorkspaceSessions !== 'function') {
     return commandResult(t('当前机器人暂不支持列出工作区会话。'));
   }
@@ -718,7 +723,12 @@ function sessionTitleCandidatesMessage(keyword, matches, header = SESSION_TITLE_
   return lines.join('\n');
 }
 
-async function runSessionBindCommand(command, harness, conversationKey) {
+async function runSessionBindCommand(command, harness, conversationKey, access = workspaceCommandAccess()) {
+  // Adopting an existing Session hands the chat that Session's history and
+  // context, so it is reserved for the account that scanned the bot.
+  if (access.isOwner !== true) {
+    return commandResult(t('只有机器人所有者才能绑定已有会话。'));
+  }
   const match = SESSION_BIND_COMMAND.exec(command);
   let sessionId = match?.[1];
   if (typeof sessionId === 'string'
@@ -1063,8 +1073,69 @@ export function workspaceSwitchFailureText(error) {
   return null;
 }
 
-export async function runWorkspaceCommand(text, harness, conversationKey) {
+/** Root paths that must never become an agent workspace, whatever the config says. */
+const FORBIDDEN_WORKSPACE_ROOTS = Object.freeze([
+  '/', '/etc', '/usr', '/var', '/bin', '/sbin', '/lib', '/boot', '/root', '/sys', '/proc', '/dev',
+]);
+
+/**
+ * Read the access options a channel passes with a command.
+ *
+ * A caller that passes no options is an in-process or test caller that already
+ * holds the Host's authority, so it keeps the historical behaviour. Channels must
+ * pass `{ isOwner, workspaceRoots }`: a recorded owner is then required for the
+ * owner-only commands, and a missing `workspaceRoots` (undefined) means the
+ * channel cannot verify the directory, which refuses the switch.
+ */
+function normalizeCommandOptions(options) {
+  // No options: an in-process caller that already holds the Host's authority.
+  if (options === undefined) return { isOwner: true, workspaceRoots: null };
+  const value = options && typeof options === 'object' ? options : {};
+  // A channel always passes the roots it knows about. An empty list means it
+  // could not verify any directory, which refuses the switch rather than
+  // accepting an arbitrary path.
+  return {
+    isOwner: value.isOwner === true,
+    workspaceRoots: Object.freeze((Array.isArray(value.workspaceRoots) ? value.workspaceRoots : [])
+      .filter((path) => typeof path === 'string' && path.startsWith('/'))
+      .map((path) => path.replace(/\/+$/u, '') || '/')),
+  };
+}
+
+/**
+ * Refuse a workspace that is outside every allowed root.
+ *
+ * `/workspace` redefines the sandbox root, so an arbitrary absolute path would
+ * let any chat turn write outside the directory the Host considers a workspace.
+ *
+ * @returns the refusal text, or null when the path may be used.
+ */
+export function workspaceSwitchRefusal(path, roots) {
+  if (typeof path !== 'string' || !path.startsWith('/')) {
+    return t('工作区必须是绝对路径。');
+  }
+  const normalized = path.replace(/\/+$/u, '') || '/';
+  if (FORBIDDEN_WORKSPACE_ROOTS.includes(normalized)) {
+    return t('不能把系统目录设为工作区。');
+  }
+  if (normalized.split('/').includes('..')) return t('工作区路径不能包含 ..。');
+  // A trusted in-process caller keeps the historical freedom; a channel that
+  // cannot name any allowed root must not move the workspace at all.
+  if (roots === null) return null;
+  if (!Array.isArray(roots) || roots.length === 0) {
+    return t('只能在已注册的 DSH 工作区之间切换；请先在 Web 端把该目录添加为工作区。');
+  }
+  const inside = roots.some((root) => normalized === root || normalized.startsWith(`${root}/`));
+  return inside ? null : t('只能在已注册的 DSH 工作区之间切换；请先在 Web 端把该目录添加为工作区。');
+}
+
+function workspaceCommandAccess(options) {
+  return normalizeCommandOptions(options);
+}
+
+export async function runWorkspaceCommand(text, harness, conversationKey, options) {
   if (!isWorkspaceCommand(text)) return null;
+  const access = workspaceCommandAccess(options);
   const config = harness.conversationDirectoryConfig?.();
   if (config?.enabled === true && /^(?:\/(?:workspace|ws|conv|conversation|thread))(?:\s|$)/iu.test(text.trim())) {
     return { message: '', messages: [] };
@@ -1078,10 +1149,10 @@ export async function runWorkspaceCommand(text, harness, conversationKey) {
     return runSessionArchiveCommand(command, harness, conversationKey);
   }
   if (SESSION_BIND_PREFIX.test(command)) {
-    return runSessionBindCommand(command, harness, conversationKey);
+    return runSessionBindCommand(command, harness, conversationKey, access);
   }
   const sessionListMatch = SESSION_LIST_COMMAND.exec(command);
-  if (sessionListMatch) return runSessionListCommand(sessionListMatch, harness, conversationKey);
+  if (sessionListMatch) return runSessionListCommand(sessionListMatch, harness, conversationKey, access);
   const listMatch = WORKSPACE_LIST_COMMAND.exec(command);
   if (listMatch) return runWorkspaceListCommand(listMatch, harness);
   const match = WORKSPACE_COMMAND.exec(command);
@@ -1092,6 +1163,12 @@ export async function runWorkspaceCommand(text, harness, conversationKey) {
   if (!workspace) return workspaceListingCommand(harness);
   if (typeof harness?.switchWorkspace !== 'function') {
     return commandResult(t('当前机器人暂不支持切换工作区。'));
+  }
+  // A chat window can reach the Host's files through the workspace, so moving it
+  // is reserved for the account that scanned the bot, and only into a directory
+  // this Host already treats as a workspace.
+  if (access.isOwner !== true) {
+    return commandResult(t('只有机器人所有者才能切换工作区。'));
   }
   try {
     let selected = workspace;
@@ -1106,6 +1183,8 @@ export async function runWorkspaceCommand(text, harness, conversationKey) {
       }
       selected = paths[position - 1];
     }
+    const refusal = workspaceSwitchRefusal(selected, access.workspaceRoots);
+    if (refusal) return commandResult(refusal);
     const current = await harness.switchWorkspace(selected);
     return commandResult(t('工作区已切换为：{workspace}', { workspace: current }));
   } catch (error) {

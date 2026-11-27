@@ -407,6 +407,8 @@ const EN = Object.freeze({
   'tgz 直链': 'tgz download',
   'git 不可达，本次已改用 tgz 直链安装。': 'git was unreachable, so this update used the tgz download instead.',
   '此命令直接下载安装包，不需要 git，也不需要访问 github.com。': 'This command downloads the release tarball directly; it needs neither git nor github.com.',
+  '允许无人值守会话直接推送': 'Allow unattended Sessions to push directly',
+  '定时任务等没有审批应答方的会话，可以不经审批直接调用 dsh_im_send 推送；每个会话仍限每分钟 3 条。用户明确拒绝的审批永远不会发送。': 'A Session with no approval answerer, such as a scheduled task, may call dsh_im_send without asking; each Session is still limited to 3 messages a minute, and an explicit refusal is never overridden.',
   '填入示例': 'Use example',
   '清空': 'Clear',
   '选择在哪些会话中启用、提供哪些来源字段，以及如何使用这些信息。仅使用已有消息元数据，不查询平台 API。': 'Choose which conversations to enhance, which source fields to include, and how to use them. Only existing message metadata is used; no platform APIs are queried.',

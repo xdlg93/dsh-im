@@ -9,7 +9,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
  * plain `ctx.name` throws on Cordis 4.2 when it was not declared. Both routes are
  * tried so a caller can pass either the plugin context or an injected child.
  */
-function serviceOf(ctx, name) {
+export function serviceOf(ctx, name) {
   if (typeof ctx?.get === 'function') {
     try {
       const service = ctx.get(name);

@@ -125,6 +125,8 @@ test('Host composes every IM channel inside one plugin context', async () => {
     'typertGateway',
     // Declared so the plugin can read the Host Workspace list through ctx.get.
     'workspaceRegistry',
+    // Declared so a proactive send can ask the user before it leaves the machine.
+    'approval',
   ]);
   assert.deepEqual(calls, [
     ['weixin', ctx, { groupByAgentPreset: true, ...config.weixin, rpcAuthority: 'trusted-host', deliveryService }],
@@ -220,6 +222,7 @@ test('#65 activates a real Cordis consumer without crossing the Connection RPC',
   ctx.provide('credentials', {});
   ctx.provide('typertGateway', { stream() {} });
   ctx.provide('workspaceRegistry', { list: () => [] });
+  ctx.provide('approval', { async request() { return 'allowed-once'; } });
   ctx.provide('sessionController', {});
   ctx.provide('workspaceController', {});
 
@@ -299,6 +302,7 @@ test('Host installs channel prefixes through the real Cordis sessions dependency
   ctx.provide('credentials', {});
   ctx.provide('typertGateway', { stream() {} });
   ctx.provide('workspaceRegistry', { list: () => [] });
+  ctx.provide('approval', { async request() { return 'allowed-once'; } });
   ctx.provide('sessionController', {});
   ctx.provide('workspaceController', {});
   const data = { title: '自动标题', messageSeqs: [0], source: { kind: 'fallback' } };

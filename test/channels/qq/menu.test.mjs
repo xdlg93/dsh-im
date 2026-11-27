@@ -80,7 +80,12 @@ async function fixture(t, { rejection, policy, group = false } = {}) {
       return { id: `reply-${sent.length}` };
     },
   };
-  const bridge = new QqHarnessBridge({ bot, ownerUserOpenid: '*', harness, state, logger: quiet, accessPolicy: policy });
+  // /workspace may only move into a directory the Host already treats as a
+  // workspace, so the fixture declares the two it uses.
+  const bridge = new QqHarnessBridge({
+    bot, ownerUserOpenid: 'owner', harness, state, logger: quiet, accessPolicy: policy,
+    workspaceRoots: [dir, other],
+  });
   const message = (content, overrides = {}) => {
     const id = `message-${++sequence}`;
     return { kind: group ? 'group' : 'c2c', groupOpenid: group ? 'group-one' : undefined,

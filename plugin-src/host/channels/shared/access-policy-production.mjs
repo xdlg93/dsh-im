@@ -18,6 +18,18 @@ function openScope(allowlistUsers = []) {
   });
 }
 
+/** Reachable by anyone, but no command execution: only for a bot with no owner. */
+function openScopeWithoutCommands() {
+  return createAccessPolicyScope({
+    mode: 'open',
+    open: {
+      defaultCanExecuteCommands: false,
+      commandPermissionOverrides: [],
+    },
+    allowlist: { users: [] },
+  });
+}
+
 function allowlistScope(users = []) {
   return createAccessPolicyScope({
     mode: 'allowlist',
@@ -40,6 +52,11 @@ function cleanIds(values) {
 /**
  * Build the one-time, backwards-compatible seed for a bot whose workspace
  * document does not yet contain an access policy.
+ *
+ * The default is the safe one for both channels: only the account that scanned
+ * the bot may talk to it, and only allowlisted people may run commands. A chat
+ * window reaches the Host's shell, files and Sessions, so "open to everyone"
+ * must be a deliberate choice, never an upgrade default.
  */
 export function initialAccessPolicyFor(channel, config = {}) {
   const key = String(channel ?? '').trim().toLowerCase();
@@ -50,10 +67,15 @@ export function initialAccessPolicyFor(channel, config = {}) {
     });
   }
   if (key === 'qq') {
-    const owners = cleanIds(config.ownerUserOpenid);
+    // The owner is a Host-only identity (privilegedSenderIdsFor), never copied
+    // into the saved policy row, so the allowlist itself stays empty: the owner
+    // still passes as a privileged sender, everyone else is refused.
+    // The wildcard means "the previous build put no owner on this bot": keep the
+    // old chat reachability but never grant command execution with it.
+    const wildcard = cleanIds(config.ownerUserOpenid).includes('*');
     return createAccessPolicy({
-      direct: owners.includes('*') ? openScope() : allowlistScope(),
-      group: openScope(),
+      direct: wildcard ? openScopeWithoutCommands() : allowlistScope(),
+      group: allowlistScope(),
     });
   }
   throw new TypeError(`Unsupported access-policy channel: ${channel}`);
@@ -61,14 +83,10 @@ export function initialAccessPolicyFor(channel, config = {}) {
 
 /**
  * Seed newly connected bots after startup has migrated existing bots with
- * initialAccessPolicyFor(). Open QQ messages and commands in both chat types;
- * workspace ensure() preserves any policy already saved.
+ * initialAccessPolicyFor(): the same owner-only allowlist, so a bot added today
+ * cannot be driven by strangers. workspace ensure() preserves any saved policy.
  */
 export function newBotAccessPolicyFor(channel, config = {}) {
-  const key = String(channel ?? '').trim().toLowerCase();
-  if (key === 'qq') {
-    return createAccessPolicy({ direct: openScope(), group: openScope() });
-  }
   return initialAccessPolicyFor(channel, config);
 }
 

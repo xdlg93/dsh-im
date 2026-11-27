@@ -9,6 +9,8 @@ const REJECTED_ARTIFACT_ERRORS = new Set([
   'artifact-empty',
   'artifact-invalid',
   'artifact-not-file',
+  'artifact-outside-workspace',
+  'artifact-sensitive-path',
   'artifact-permission-required',
   'artifact-provider-rejected',
   'artifact-too-large',

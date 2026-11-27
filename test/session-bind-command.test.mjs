@@ -183,6 +183,8 @@ test('the shared bridge binds locally with its conversation key and never prompt
       hasSeen(messageId) { return seen.has(messageId); },
       async markSeen(messageId) { seen.add(messageId); },
     },
+    // Binding an existing Session is owner-only: the fixture is the scanner.
+    accessPolicy: { isPrivileged: () => true, getSettings: () => null },
   });
 
   await bridge.accept({
@@ -218,9 +220,13 @@ test('every channel bridge advertises /session and passes its current conversati
       assert.match(source, /\/session Session ID、当前工作区序号或标题关键词  将当前聊天绑定到指定会话/);
     }
     assert.ok(
-      source.includes(`runWorkspaceCommand(text, this.#harness, ${key})`),
+      source.includes(`runWorkspaceCommand(text, this.#harness, ${key}`),
       `${file} must pass ${key} to the shared command`,
     );
+    // The shared command needs the channel's owner identity and allowed roots to
+    // keep workspace switching and Session binding to the scanner.
+    assert.match(source, /isOwner:/, `${file} must pass the owner flag`);
+    assert.match(source, /workspaceRoots:/, `${file} must pass the allowed workspace roots`);
   }
 
 });

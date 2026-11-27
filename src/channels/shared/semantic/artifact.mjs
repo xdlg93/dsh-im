@@ -182,6 +182,25 @@ export async function readExactArtifactFile(handle, expectedSize, {
   return bytes;
 }
 
+/**
+ * Paths a chat may never receive, even from inside the workspace.
+ *
+ * The Host's credentials and keys are plain files under the user's home, and a
+ * model that was talked into "send me that file" must not be able to attach
+ * them to a message.
+ */
+const ARTIFACT_SENSITIVE_SEGMENTS = Object.freeze([
+  '.ssh', '.dsh', '.gnupg', '.aws', '.config/gcloud', '.kube',
+]);
+const ARTIFACT_SENSITIVE_NAME = /^(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|credentials?.*|\.?env(?:\..*)?|.*\.pem|.*\.key|.*\.p12|.*\.pfx|known_hosts|authorized_keys|.*\.netrc)$/iu;
+
+function sensitiveArtifactPath(canonicalPath) {
+  const segments = canonicalPath.split('/').filter(Boolean);
+  if (segments.some((segment) => ARTIFACT_SENSITIVE_SEGMENTS.includes(segment))) return true;
+  const name = segments.at(-1) ?? '';
+  return ARTIFACT_SENSITIVE_NAME.test(name);
+}
+
 async function snapshotFile(workspace, requestedPath, signal) {
   signal?.throwIfAborted();
   let storagePath;
@@ -190,6 +209,20 @@ async function snapshotFile(workspace, requestedPath, signal) {
       ? requestedPath
       : resolve(workspace, requestedPath);
     const canonicalPath = await realpath(candidate);
+    // A delivered file leaves the machine, so it must be one the workspace owns.
+    // `workspace` is the canonical Session directory; anything outside it is
+    // refused instead of being snapshotted, which keeps `~/.ssh/id_rsa` and the
+    // Host's credential store out of a chat that was prompt-injected into asking.
+    const canonicalWorkspace = await realpath(workspace).catch(() => null);
+    if (canonicalWorkspace === null
+      || !(canonicalPath === canonicalWorkspace || canonicalPath.startsWith(`${canonicalWorkspace}/`))) {
+      throw artifactError('artifact-outside-workspace',
+        'The requested file is outside the Session workspace.');
+    }
+    if (sensitiveArtifactPath(canonicalPath)) {
+      throw artifactError('artifact-sensitive-path',
+        'The requested file looks like a credential or key.');
+    }
     const source = await lstat(canonicalPath, { bigint: true });
     if (!source.isFile()) {
       throw artifactError('artifact-not-file', 'The requested path is not a file.');

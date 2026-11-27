@@ -200,9 +200,39 @@ Open **Context enhancement** on a bot card to configure group and direct chats s
 
 ### Access policies
 
-- **Direct messages**: all users by default, or "allowlisted users only". The allowlist stores platform user IDs; once saved, other users cannot use the bot.
-- **Group chats** (QQ): group allowlists and a default command permission can be set separately. A QR-scanned DM identity is exempt only when it matches the confirmed owner; other members follow the group allowlist.
-- **Command permissions**: allowlisted users can be given individual command tiers.
+A chat window reaches the Host's shell, files and Sessions, so the defaults are
+"only the scanner can use it":
+
+- **Direct messages**: `allowlist` by default — only the account that scanned the
+  bot. Opening the bot to everyone is an explicit change in the settings page.
+- **Group chats** (QQ): also allowlist-only by default; adding the bot to a group
+  grants its members nothing. A QR-scanned DM identity is exempt only when it
+  matches the confirmed owner.
+- **Command access**: only allowlisted users run commands. "Open plus commands"
+  hands the Host to everyone in that chat and must be enabled deliberately.
+- WeChat and QQ share the same defaults. A migrated QQ bot with only the `*`
+  wildcard owner keeps its old reachability but no longer executes commands.
+
+### Security boundaries
+
+These are deliberately restricted so one chat message cannot take over the Host:
+
+- `/permission`: anyone with command access may read the presets, but **only the
+  owner, in a direct chat, may switch**; `danger-full-access` (full file access,
+  no approval prompts) is refused from IM entirely and stays a Web-side action.
+- `/workspace`: **owner only**, and only into a directory DSH already treats as a
+  workspace (or the plugin's own default); `/`, `/etc` and `..` are refused.
+- `/sessionlist --all` and `/session <ID>`: cross-workspace listing and adopting
+  an existing Session are **owner only**, so a group cannot pull in someone
+  else's history.
+- `dsh_im_return_file`: only files **inside the Session workspace** are sent;
+  `~/.ssh`, `~/.dsh`, `id_rsa`, `.env`, `*.pem` and similar are refused.
+- `dsh_im_send`: every send asks the Host for approval (`allowed-once` only) and
+  each Session may push **at most 3 messages a minute**; without an approval
+  answerer the send is refused by default. A scheduled or headless Session can be
+  allowed through **General settings → Delivery → Allow unattended Sessions to
+  push directly** (or the plugin option `allowUnattendedSend: true`); an explicit
+  refusal is never overridden, and the 3-a-minute limit still applies.
 
 ### Queueing and interjection
 
@@ -305,7 +335,7 @@ Privacy and security boundaries:
 - QR-scanned tokens and secrets go only to the local Harness Host and its protected credential store. The browser sees QR codes, masked state, and the bot list; no RPC response ever returns raw credentials.
 - Bot state files keep session bindings, `senderId`, and "is this a bot" identity only — never message text.
 - Group history stores only messages and attachments that were actually received, shared per group and rolled off by retention days.
-- The proactive-delivery HTTP endpoint has no authentication; use it only on the local machine or a trusted network, never expose it to the public internet.
+- The proactive-delivery HTTP endpoint adds no application-level authentication; use it only on the local machine or a trusted network, never expose it to the public internet.
 
 ## Troubleshooting
 
