@@ -330,6 +330,7 @@ export class WeixinHarnessBridge {
   /** Called with the sender id once an inbound message has reopened the session. */
   #onInboundMessage;
   #workspaceRoots;
+  #guestAgentPreset;
   #signal;
   #queues = new Map();
   #busyMessages = new BusyMessageDispatcher();
@@ -368,6 +369,8 @@ export class WeixinHarnessBridge {
     onInboundMessage = undefined,
     // Directories /workspace may switch to; empty means the plugin's own root.
     workspaceRoots = [],
+    // Preset a non-owner chat runs under; null keeps everyone on the bot's own.
+    guestAgentPreset = null,
   }) {
     if (!api || typeof api.sendText !== 'function') throw new TypeError('Weixin API is required');
     if (!baseUrl || !token || !ownerUserId) throw new TypeError('Weixin account credentials are required');
@@ -392,6 +395,8 @@ export class WeixinHarnessBridge {
     this.#onInboundMessage = typeof onInboundMessage === 'function' ? onInboundMessage : undefined;
     this.#workspaceRoots = Object.freeze((Array.isArray(workspaceRoots) ? workspaceRoots : [])
       .filter((path) => typeof path === 'string' && path.startsWith('/')));
+    this.#guestAgentPreset = typeof guestAgentPreset === 'string' && guestAgentPreset.trim()
+      ? guestAgentPreset.trim() : null;
     this.#deferred = createDeferredDeliveryCoordinator({ harness, state, signal, logger,
       deliver: (entry, outcome) => this.#deliverDeferredOutcome(entry, outcome),
     });
@@ -700,6 +705,11 @@ export class WeixinHarnessBridge {
     return task;
   }
 
+  /** Whether this sender is the account that scanned the bot. */
+  #isOwnerSender(sender) {
+    return nonEmptyString(sender) === this.#ownerUserId;
+  }
+
   #finishAccessDecision(messageId, sender, message, access) {
     const contextToken = nonEmptyString(message?.context_token) ?? undefined;
     const runId = nonEmptyString(message?.run_id) ?? undefined;
@@ -980,7 +990,13 @@ export class WeixinHarnessBridge {
           titleText: batchSubmission?.title,
           sourceGuidance: captured?.snapshot?.config?.guidance,
           contextEnhanced,
-          createOptions: { signal: this.#signal },
+          createOptions: {
+            signal: this.#signal,
+            // A guest session is created under the tool-less preset, so the
+            // composition itself is the boundary rather than an approval prompt.
+            ...(this.#guestAgentPreset && !this.#isOwnerSender(sender)
+              ? { agentPreset: this.#guestAgentPreset } : {}),
+          },
           existsOptions: { signal: this.#signal },
           askOptions: {
             timeoutMs: this.#replyTimeoutMs,

@@ -2,6 +2,7 @@ import { installGroupHistoryTools } from '../../src/channels/shared/group-histor
 import { apply as applyQq } from './channels/qq/index.mjs';
 import { apply as applyWeixin } from './channels/weixin/index.mjs';
 import { installOutboundArtifactTool } from '../../src/channels/shared/semantic/artifact.mjs';
+import { installGuestPreset } from './guest-preset.mjs';
 import { installProactiveSendTools } from './channels/shared/proactive-send-tool.mjs';
 import { installHostLanguage } from './host-language.mjs';
 import { installHostLanguageRpc } from './host-language-rpc.mjs';
@@ -37,10 +38,14 @@ export const inject = [
   // plugin from loading on a profile that ships without them.
 ];
 
-function channelConfig(config, name, deliveryService) {
+function channelConfig(config, name, deliveryService, guestAgentPreset = null) {
   const channel = {
     ...(config.dshHome ? { dshHome: config.dshHome } : {}),
     ...(config.groupByAgentPreset === undefined ? {} : { groupByAgentPreset: config.groupByAgentPreset }),
+    // Guest sessions run under this preset; the channel passes it to createSession.
+    ...(typeof guestAgentPreset === 'string' && guestAgentPreset.trim()
+      ? { guestAgentPreset: guestAgentPreset.trim() }
+      : {}),
     ...config[name],
   };
   const withAuthority = config.rpcAuthority === undefined
@@ -75,6 +80,8 @@ export function createImHostPlugin(internals = {}) {
       const unavailableSessionSyncChannels = channels
         .map(([channel]) => channel)
         .filter((channel) => config[channel]?.harnessBaseUrl !== undefined);
+      // A guest chat must not reach tools, so it runs under a tool-less preset.
+      const guestAgentPreset = installGuestPreset(ctx, config);
       const deliveryService = makeDeliveryService({
         unavailableSessionSyncChannels,
         dsBot: createDsBotClient(ctx),
@@ -133,7 +140,7 @@ export function createImHostPlugin(internals = {}) {
         }));
       }
       const activate = async (readyCtx) => {
-        await activateChannels(readyCtx, config, deliveryService);
+        await activateChannels(readyCtx, config, deliveryService, guestAgentPreset);
       };
       if (typeof ctx?.inject === 'function') {
         await ctx.inject(
@@ -152,7 +159,7 @@ export function createImHostPlugin(internals = {}) {
     },
   });
 
-  async function activateChannels(ctx, config, deliveryService) {
+  async function activateChannels(ctx, config, deliveryService, guestAgentPreset = null) {
     // Bind the bot message language before any channel connects, so the first
     // command menu a platform stores is already in the interface language.
     const hostLanguage = startHostLanguage(ctx, config);
@@ -252,7 +259,7 @@ export function createImHostPlugin(internals = {}) {
     // Start them together so a slow channel cannot leave later routes absent.
     await Promise.all(channels.map(async ([channel, start]) => {
       try {
-        await start(ctx, channelConfig(config, channel, deliveryService));
+        await start(ctx, channelConfig(config, channel, deliveryService, guestAgentPreset));
       } catch (error) {
         failures.push(error);
         logger.error?.(`[dsh-im] failed to activate ${channel}; continuing with the remaining channels`, error);

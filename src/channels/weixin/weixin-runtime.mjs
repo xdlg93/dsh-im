@@ -213,6 +213,7 @@ export class WeixinRuntime {
         // only moment a queued proactive message can be delivered.
         onInboundMessage: (sender) => { void this.flushOutbox(sender); },
         workspaceRoots: this.#config.workspaceRoots ?? [],
+        guestAgentPreset: this.#config.guestAgentPreset ?? null,
       });
       this.#status.ready = true;
       this.#status.weixinConnectionState = 'connected';

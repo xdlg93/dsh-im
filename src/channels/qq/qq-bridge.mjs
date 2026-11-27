@@ -510,6 +510,7 @@ export class QqHarnessBridge {
   #menus = new QqMenuStore();
   #menuTasks = new Map();
   #workspaceRoots;
+  #guestAgentPreset;
 
   constructor({
     bot,
@@ -527,6 +528,8 @@ export class QqHarnessBridge {
     fileUploadTimeoutMs = DEFAULT_FILE_UPLOAD_TIMEOUT_MS,
     // Directories /workspace may switch to; empty means the plugin's own root.
     workspaceRoots = [],
+    // Preset a non-owner chat runs under; null keeps everyone on the bot's own.
+    guestAgentPreset = null,
   }) {
     if (!bot || typeof bot.sendText !== 'function') throw new TypeError('QQ bot client is required');
     if (!ownerUserOpenid) throw new TypeError('QQ scanner identity is required');
@@ -548,6 +551,8 @@ export class QqHarnessBridge {
     this.#signal = signal;
     this.#workspaceRoots = Object.freeze((Array.isArray(workspaceRoots) ? workspaceRoots : [])
       .filter((path) => typeof path === 'string' && path.startsWith('/')));
+    this.#guestAgentPreset = typeof guestAgentPreset === 'string' && guestAgentPreset.trim()
+      ? guestAgentPreset.trim() : null;
     this.#deferred = createDeferredDeliveryCoordinator({ harness, state, signal, logger,
       finalAnswerOnly: true,
       deliver: (entry, outcome) => this.#deliverDeferredOutcome(entry, outcome),
@@ -1152,6 +1157,11 @@ export class QqHarnessBridge {
     return task;
   }
 
+  /** Whether this sender is the account that scanned the bot. */
+  #isOwnerSender(senderId) {
+    return this.#ownerUserOpenid !== '*' && nonEmptyString(senderId) === this.#ownerUserOpenid;
+  }
+
   #finishAccessDecision(message, messageId, access) {
     let task;
     task = Promise.resolve().then(async () => {
@@ -1405,7 +1415,13 @@ export class QqHarnessBridge {
           titleText: batchSubmission?.title,
           sourceGuidance: snapshot?.config?.guidance,
           contextEnhanced,
-          createOptions: { signal: this.#signal },
+          createOptions: {
+            signal: this.#signal,
+            // A guest session is created under the tool-less preset, so the
+            // composition itself is the boundary rather than an approval prompt.
+            ...(this.#guestAgentPreset && !this.#isOwnerSender(message.senderId)
+              ? { agentPreset: this.#guestAgentPreset } : {}),
+          },
           existsOptions: { signal: this.#signal },
           askOptions: {
             groupHistory: message.groupHistory,

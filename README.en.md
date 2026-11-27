@@ -229,9 +229,15 @@ These are deliberately restricted so one chat message cannot take over the Host:
   stopping one are **owner only**, so a group cannot reach someone else's work.
 - "Allowed to chat" is not "allowed to run tools": a plain message can drive
   `read` or `web_fetch`, which need no approval, so guest chat is **off by
-  default**; only the owner chats unless the access settings enable it
-  (`allowGuestChat`). For tools that do need approval, a non-owner's request is
-  settled by the **owner**.
+  default**.
+- When guest chat is enabled, the plugin registers an Agent preset with **no tool
+  plugins** (`dsh-im-guest`) and creates guest sessions under it: guests chat
+  normally, but reading files, fetching pages and running commands do not exist in
+  their composition. The owner's own sessions keep the bot's preset. Point the
+  `guestAgentPreset` option at your own preset to use that instead; the built-in
+  one is then not registered.
+- For tools that do need approval, a non-owner's request is settled by the
+  **owner**.
 - `dsh_im_return_file`: only files **inside the Session workspace** are sent;
   `~/.ssh`, `~/.dsh`, `id_rsa`, `.env`, `*.pem` and similar are refused.
 - `dsh_im_send`: every send asks the Host for approval (`allowed-once` only) and
