@@ -100,15 +100,14 @@ for (const channel of ['qq']) {
         { allowed: true, reason: 'privileged-sender' });
     }
 
-    // A legacy wildcard owner keeps the old reachability for chat, but commands
-    // stay closed and groups still require the allowlist.
+    // A legacy wildcard owner records no identity, so the bot is closed: chat
+    // access alone would still let a stranger drive tools through the model.
     const manualBot = bot('manual', '*');
     bots.push(manualBot);
     const manual = await connect(manualBot);
     const manualPolicy = manual.getSettings();
-    assert.equal(manualPolicy.direct.mode, 'open');
-    assert.equal(manualPolicy.direct.open.defaultCanExecuteCommands, false);
-    assert.equal(checkAccess(manual, 'direct', 'other', 'hello').allowed, true);
+    assert.equal(manualPolicy.direct.mode, 'allowlist');
+    assert.equal(checkAccess(manual, 'direct', 'other', 'hello').allowed, false);
     assert.equal(checkAccess(manual, 'direct', 'other', '/status').allowed, false);
     assert.equal(manualPolicy.group.mode, 'allowlist');
     assert.equal(checkAccess(manual, 'group', 'other', 'hello').allowed, false);

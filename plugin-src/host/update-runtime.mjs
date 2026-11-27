@@ -13,6 +13,22 @@ export const REPOSITORY_URL = 'https://github.com/xdlg93/dsh-im';
 const GIT_SPEC = /^git\+(?:https|ssh):\/\//u;
 /** A release tarball served over HTTPS: the channel that needs no git and no registry. */
 const TGZ_SPEC = /^https:\/\/[^\s]+\.tgz$/u;
+/** The verified copy of that tarball, as the updater hands it to the installer. */
+const TGZ_FILE_SPEC = /^file:(\/[^\s]+\/dsh-im-\d+\.\d+\.\d+\.tgz)$/u;
+
+/**
+ * Whether a `file:` spec is the verified download this updater wrote.
+ *
+ * The update service downloads the tarball, checks it against the index digest
+ * and installs the local copy. Accepting only that location keeps an arbitrary
+ * local path from being installed through the same channel.
+ */
+export function verifiedTarballPath(spec, homeDir) {
+  const match = TGZ_FILE_SPEC.exec(typeof spec === 'string' ? spec : '');
+  if (!match || typeof homeDir !== 'string' || !homeDir.startsWith('/')) return null;
+  const path = match[1];
+  return path.startsWith(`${homeDir}/updates/dsh-im/`) && path.includes('/downloads/') ? path : null;
+}
 
 /**
  * How this profile installed the plugin: the channel an update should prefer.
@@ -20,10 +36,14 @@ const TGZ_SPEC = /^https:\/\/[^\s]+\.tgz$/u;
  * `registry` (a version range), `git` (this repository), `tgz` (a release tarball
  * URL) or `local` (link, file, workspace) which cannot be replaced.
  */
-export function installChannelOf(spec) {
+export function installChannelOf(spec, { homeDir } = {}) {
   if (typeof spec !== 'string' || spec.trim() === '') return 'registry';
   const trimmed = spec.trim();
   if (TGZ_SPEC.test(trimmed)) return 'tgz';
+  // A tarball this updater downloaded and verified is still the tgz channel: the
+  // profile records a `file:` path, and treating that as a local source would
+  // block every later update.
+  if (verifiedTarballPath(trimmed, homeDir)) return 'tgz';
   if (GIT_SPEC.test(trimmed)) return trimmed.includes(REPOSITORY_URL) ? 'git' : 'local';
   if (/^(?:link|file|workspace):/u.test(trimmed) || isAbsolute(trimmed) || trimmed.startsWith('.')) return 'local';
   return registrySpec(trimmed) ? 'registry' : 'local';
@@ -40,7 +60,19 @@ function failure(code, extra = {}) {
 // Cordis 4's get() is the supported optional-service lookup. Putting these
 // Desktop-only services in the plugin's inject array would disable web Hosts.
 function service(ctx, name) {
-  return typeof ctx?.get === 'function' ? ctx.get(name) : ctx?.[name];
+  if (typeof ctx?.get === 'function') {
+    try {
+      const value = ctx.get(name);
+      if (value !== undefined) return value;
+    } catch {
+      // A service the fiber did not inject throws; fall through to the property.
+    }
+  }
+  try {
+    return ctx?.[name];
+  } catch {
+    return undefined;
+  }
 }
 
 function inside(directory, filename) {
@@ -369,7 +401,7 @@ export function createUpdateRuntime(options = {}) {
       // A git install of this repository and a release tarball are both published
       // by the plugin index, so either can be updated in place. Only a local
       // source (link, file, workspace) has no upstream to update from.
-      result.installChannel = installChannelOf(declaredSpec);
+      result.installChannel = installChannelOf(declaredSpec, { homeDir: runtime.homeDir });
       result.gitInstall = result.installChannel === 'git';
       result.sourceInstall = result.installChannel === 'local'
         || !inside(join(runtime.profileDir, 'node_modules'), installed.directory);
@@ -414,7 +446,8 @@ export function createUpdateRuntime(options = {}) {
   async function install(version, { signal, expectedInstallationKey, spec } = {}) {
     if (semver.valid(version) !== version || semver.prerelease(version)) throw failure('invalid-version');
     const target = typeof spec === 'string' && spec.length > 0 ? spec : `${PACKAGE_NAME}@${version}`;
-    if (target !== `${PACKAGE_NAME}@${version}` && !GIT_SPEC.test(target) && !TGZ_SPEC.test(target)) {
+    if (target !== `${PACKAGE_NAME}@${version}` && !GIT_SPEC.test(target) && !TGZ_SPEC.test(target)
+      && !verifiedTarballPath(target, await environment().then((runtime) => runtime.homeDir))) {
       throw failure('invalid-version');
     }
     const before = await inspect();

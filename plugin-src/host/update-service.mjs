@@ -70,6 +70,9 @@ export async function fetchNpmRelease(fetchImpl = globalThis.fetch, timeoutMs = 
   }
 }
 
+/** Largest release tarball this updater will buffer. */
+const TARBALL_MAX_BYTES = 32 * 1024 * 1024;
+
 /** The plugin index this fork publishes; it names git sources, not npm tarballs. */
 export const RELEASE_INDEX_URL = 'https://xdlg93.github.io/dsh-im/index.json';
 const COMMIT = /^[0-9a-f]{40}$/u;
@@ -478,12 +481,17 @@ export function createUpdateService({
       throw updateError('install-failed');
     }
     if (!response?.ok) throw updateError('install-failed');
+    // A tarball is a few megabytes; refuse an index entry that asks for more
+    // before the whole body is buffered.
+    const declared = Number(response.headers?.get?.('content-length'));
+    if (Number.isFinite(declared) && declared > TARBALL_MAX_BYTES) throw updateError('tgz-too-large');
     let bytes;
     try {
       bytes = Buffer.from(await response.arrayBuffer());
     } catch {
       throw updateError('install-failed');
     }
+    if (bytes.length > TARBALL_MAX_BYTES) throw updateError('tgz-too-large');
     const actual = createHash('sha256').update(bytes).digest('hex');
     if (actual !== expected) throw updateError('tgz-integrity');
     await mkdir(paths.downloads, { recursive: true, mode: 0o700 });

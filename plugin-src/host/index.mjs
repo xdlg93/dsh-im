@@ -32,12 +32,9 @@ export const inject = [
   // plugin has to read the Host's Workspace list. Reading it through ctx.get()
   // only answers for a service this fiber injected, which is why it is declared.
   'workspaceRegistry',
-  // Proactive sends ask the user before a message leaves the machine.
-  'approval',
-  // The Host's own plugin manager installs updates; it owns pnpm, the registry
-  // fallback and the Desktop/CLI environment, so the panel no longer needs its
-  // own executor.
-  'pluginManager',
+  // `approval` and `pluginManager` are read through ctx.get() only after a
+  // nested inject confirms they exist: declaring them here would keep the whole
+  // plugin from loading on a profile that ships without them.
 ];
 
 function channelConfig(config, name, deliveryService) {
@@ -173,7 +170,6 @@ export function createImHostPlugin(internals = {}) {
     } else if (ctx?.sessions && typeof ctx.on === 'function') {
       startTitlePrefix(ctx);
     }
-    const approval = serviceOf(ctx, 'approval');
     // Read per send so the settings toggle applies without a restart.
     const unattendedSend = async () => {
       if (config.allowUnattendedSend === true) return true;
@@ -185,17 +181,27 @@ export function createImHostPlugin(internals = {}) {
       }
     };
     if (typeof ctx?.inject === 'function') {
-      ctx.inject(['tools', 'systemPrompt'], (artifactCtx) => {
+      // `approval` is optional: a profile without it still gets the artifact and
+      // group-history tools, and only the proactive-send gate is unavailable.
+      ctx.inject(['tools', 'systemPrompt', 'approval'], (artifactCtx) => {
         installOutboundArtifactTool(artifactCtx);
         installGroupHistoryTools(artifactCtx);
         // Proactive push needs the delivery service built above, so it is
         // registered here rather than at plugin construction.
-        installProactiveSendTools(artifactCtx, { deliveryService, approval, unattendedSend });
+        installProactiveSendTools(artifactCtx, {
+          deliveryService,
+          approval: serviceOf(artifactCtx, 'approval'),
+          unattendedSend,
+        });
       });
     } else {
       installOutboundArtifactTool(ctx);
       installGroupHistoryTools(ctx);
-      installProactiveSendTools(ctx, { deliveryService, approval, unattendedSend });
+      installProactiveSendTools(ctx, {
+        deliveryService,
+        approval: serviceOf(ctx, 'approval'),
+        unattendedSend,
+      });
     }
     const logger = typeof ctx?.logger === 'function'
       ? ctx.logger(name)

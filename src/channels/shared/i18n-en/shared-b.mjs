@@ -387,4 +387,12 @@ export default {
     'The file "{name}" looks like a credential or key file, so sending it was refused.',
   '微信通道不支持切换权限档位；请在 QQ 私聊或 Web 设置里切换。':
     'The WeChat channel cannot change permission presets; switch it in a QQ direct chat or in the Web settings.',
+  'IM 通道不能切换到 {id}（会放开沙箱或审批）。请在 Web 设置里操作。':
+    'A chat cannot switch to {id} (it widens the sandbox or the approval policy). Use the Web settings.',
+  '只有机器人所有者才能归档或停止会话。':
+    'Only the bot owner can archive or stop a Session.',
+  '按工作区列出会话仅机器人所有者可用；不带参数只列当前工作区。':
+    "Listing another workspace's Sessions is owner-only; without an argument only this workspace is listed.",
+  '只有机器人所有者可以批准由他人发起的操作。':
+    'Only the bot owner can approve an action someone else started.',
 };

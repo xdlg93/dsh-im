@@ -67,7 +67,7 @@ export function validHarnessApproval(payload) {
 }
 
 /** Keys whose value is a secret no chat message should echo back. */
-const SECRET_KEY = /^(?:.*(?:token|secret|password|passwd|api[-_]?key|credential|private[-_]?key|authorization|cookie).*)$/iu;
+const SECRET_KEY = /^(?!(?:max|min|num|total)[-_]?(?:tokens?|new[-_]?tokens)$)(?:.*(?:token|secret|password|passwd|api[-_]?key|credential|private[-_]?key|authorization|cookie).*)$/iu;
 /** Inline `name=value` or `name: value` pairs inside a free-form string. */
 const SECRET_PAIR = /\b([\w.-]*(?:token|secret|password|passwd|api[-_]?key|credential)[\w.-]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/giu;
 /** `Authorization: Bearer <token>` and its Basic form. */
@@ -168,6 +168,24 @@ function approvalOutcomeText(outcome) {
   return t(APPROVAL_RESOLVED_TEXT);
 }
 
+/**
+ * Whether this decision may settle the request.
+ *
+ * The requester's own approval is accepted only when the requester is the bot
+ * owner. A stranger's tool call therefore escalates to the owner instead of being
+ * self-approved, which is what stops "chat access" from becoming tool access.
+ */
+function ownerDecides(pending, actor, isOwner) {
+  if (typeof isOwner !== 'function') return true;
+  try {
+    if (isOwner(actor) === true) return true;
+    // The requester approving their own request is only safe for the owner.
+    return pending?.actor !== actor;
+  } catch {
+    return false;
+  }
+}
+
 export class HarnessApprovalQueue {
   #label;
   #logger;
@@ -216,6 +234,9 @@ export class HarnessApprovalQueue {
     questionCompletion,
     isQuestionPending,
     send,
+    // Whether the deciding sender is the account that scanned the bot. Defaults to
+    // true so an in-process caller that already holds the Host keeps working.
+    isOwner = () => true,
   }) {
     const route = this.#routes.get(key);
     const pending = route?.items[0];
@@ -245,8 +266,16 @@ export class HarnessApprovalQueue {
       return notice(t(APPROVAL_RESOLVED_TEXT), true);
     }
     if (pending.actor !== actor || (pending.requiresMention && addressed !== true)) {
+      // A requester who is not the owner must not be able to approve their own
+      // action: that would make the approval a formality for anyone who can chat.
+      if (decision && !ownerDecides(pending, actor, isOwner)) {
+        return notice(t('只有机器人所有者可以批准由他人发起的操作。'));
+      }
       if (!decision) return null;
       return notice(t('只有发起当前任务的用户可以处理这条审批。'));
+    }
+    if (decision && !ownerDecides(pending, actor, isOwner)) {
+      return notice(t('只有机器人所有者可以批准由他人发起的操作。'));
     }
 
     return {

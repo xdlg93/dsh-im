@@ -147,7 +147,7 @@ test('QQ menus list conversation sessions while workspace choices retain the bot
   assert.equal(f.harness.currentWorkspace(), f.workspaceA);
 });
 
-test('QQ rejects an actor\'s old session menu after another group actor changes /conv', async (t) => {
+test('a non-owner cannot change the conversation workspace, so an old menu stays valid', async (t) => {
   const f = await fixture(t);
   const key = 'group:group-one';
   const sent = [];
@@ -174,18 +174,19 @@ test('QQ rejects an actor\'s old session menu after another group actor changes 
     });
   };
   await send(`/conv ${f.workspaceB}`);
+  assert.equal(f.harness.currentConversationWorkspace(key), f.workspaceB);
   await send('/m sessions');
   const menu = sent.findLast((message) => message.keyboard);
   assert.ok(menu);
   const choice = menu.keyboard.content.rows[0].buttons[0].action.data;
-  await send(`/conv ${f.workspaceA}`, 'other');
-  assert.equal(f.state.sessionFor(key), null);
-  await send(choice);
 
-  assert.deepEqual(f.adoptedSessions, []);
-  assert.equal(f.harness.currentConversationWorkspace(key), f.workspaceA);
-  assert.equal(f.state.sessionFor(key), null);
-  assert.match(JSON.stringify(sent.at(-1)), /会话或工作区已变化/u);
+  // The per-conversation workspace is a sandbox root, so only the scanner may
+  // move it; the refusal leaves the menu and the workspace untouched.
+  await send(`/conv ${f.workspaceA}`, 'other');
+  assert.match(JSON.stringify(sent.at(-1)), /只有机器人所有者/u);
+  assert.equal(f.harness.currentConversationWorkspace(key), f.workspaceB);
+  await send(choice);
+  assert.notDeepEqual(f.adoptedSessions, []);
 });
 
 test('the production scope exposes archiveWorkspaceSession for /sessionarchive', async (t) => {

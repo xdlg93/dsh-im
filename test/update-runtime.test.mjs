@@ -448,3 +448,28 @@ test('a manager rejection is reported as an install failure with its cause', asy
   await assert.rejects(runtime.install('3.0.9', { expectedInstallationKey: info.installationKey }),
     (error) => error.code === 'install-failed' && error.cause === cause);
 });
+
+test('the verified tarball copy is installed and stays the tgz channel', async (t) => {
+  const { installChannelOf, verifiedTarballPath } = await import('../plugin-src/host/update-runtime.mjs');
+  const homeDir = '/home/reader/.dsh';
+  const spec = `file:${homeDir}/updates/dsh-im/abc123/downloads/dsh-im-1.3.7.tgz`;
+  assert.equal(verifiedTarballPath(spec, homeDir), `${homeDir}/updates/dsh-im/abc123/downloads/dsh-im-1.3.7.tgz`);
+  // Anything outside that directory, or another name, is not accepted.
+  assert.equal(verifiedTarballPath('file:/etc/passwd', homeDir), null);
+  assert.equal(verifiedTarballPath(`file:${homeDir}/updates/dsh-im/abc/downloads/other.tgz`, homeDir), null);
+  assert.equal(verifiedTarballPath(spec, '/other/home'), null);
+  // A profile recording the verified copy must not look like a local source.
+  assert.equal(installChannelOf(spec, { homeDir }), 'tgz');
+  assert.equal(installChannelOf('file:/home/reader/project/dsh-im', { homeDir }), 'local');
+});
+
+test('a verified tarball copy installs through the runtime', async (t) => {
+  const f = await fixture(t);
+  const manager = { installs: [], async installBundle(spec) { this.installs.push(spec); } };
+  f.options.ctx = { get: (name) => (name === 'pluginManager' ? manager : undefined) };
+  const runtime = f.runtime();
+  const info = await runtime.inspect();
+  const spec = `file:${f.homeDir}/updates/dsh-im/abc123/downloads/dsh-im-3.0.9.tgz`;
+  await runtime.install('3.0.9', { expectedInstallationKey: info.installationKey, spec });
+  assert.deepEqual(manager.installs, [spec]);
+});

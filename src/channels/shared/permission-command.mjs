@@ -6,6 +6,12 @@ import { splitWorkspaceCommandMessage } from './workspace-command.mjs';
 import { WORKSPACE_SESSION_STALE } from './workspace-session.mjs';
 
 const COMMAND = /^\/(?:permission|permissionlist)(?=$|\s)/iu;
+/**
+ * Presets a chat may switch to. The list is an allow-list because the Host's
+ * preset set is configurable: a new preset that widens the sandbox must be added
+ * here deliberately, and an unknown id fails closed.
+ */
+const IM_SELECTABLE_PRESETS = new Set(['read-only', 'workspace-write']);
 const SNAPSHOTS = createCommandListSnapshots();
 const USAGE = '用法：/permission 查看当前权限；/permissionlist 列出档位；/permission <序号或完整ID> 切换；纯数字 ID 使用 /permission id:<ID>。';
 const SCOPE = '仅影响当前会话；沙箱与审批策略会同时按 Host 的档位定义更新。';
@@ -130,10 +136,11 @@ export async function runPermissionCommand(text, harness, state, key, options = 
       // Channels pass an explicit owner flag; a caller that omits it is an
       // in-process or test caller that already holds the Host's authority.
       if (options.isOwner === false) return result(t('只有机器人所有者在私聊中才能切换权限档位。'));
-      // The unrestricted preset disables the sandbox and the approval prompts, so
-      // it stays a deliberate action on the Web side, never a chat command.
-      if (selected === 'danger-full-access') {
-        return result(t('IM 通道不能切换到 danger-full-access（完全文件访问、免审批）。请在 Web 设置里操作。'));
+      // Allow-list the presets a chat may select. `danger-full-access` and `auto`
+      // both resolve to the unrestricted sandbox (auto only adds an approval
+      // prompt the requester answers themselves), so neither is a chat action.
+      if (!IM_SELECTABLE_PRESETS.has(selected)) {
+        return result(t('IM 通道不能切换到 {id}（会放开沙箱或审批）。请在 Web 设置里操作。', { id: selected }));
       }
       if (typeof session?.executeCommand !== 'function') return result(t('当前 Host 暂不支持从机器人查看或切换权限档位。'));
       signal.throwIfAborted();

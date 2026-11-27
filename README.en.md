@@ -218,13 +218,18 @@ A chat window reaches the Host's shell, files and Sessions, so the defaults are
 These are deliberately restricted so one chat message cannot take over the Host:
 
 - `/permission`: anyone with command access may read the presets, but **only the
-  owner, in a direct chat, may switch**; `danger-full-access` (full file access,
-  no approval prompts) is refused from IM entirely and stays a Web-side action.
-- `/workspace`: **owner only**, and only into a directory DSH already treats as a
-  workspace (or the plugin's own default); `/`, `/etc` and `..` are refused.
-- `/sessionlist --all` and `/session <ID>`: cross-workspace listing and adopting
-  an existing Session are **owner only**, so a group cannot pull in someone
-  else's history.
+  owner may switch**, and only to `read-only` or `workspace-write`; presets that
+  widen the sandbox or the approval policy (`danger-full-access`, `auto`) are
+  refused from IM entirely and stay a Web-side action.
+- `/workspace` and `/conv`: **owner only**, and only into a directory DSH already
+  treats as a workspace (or the plugin's own default); `/`, `/etc` and `..` are
+  refused, and both commands share one policy.
+- `/sessionlist --all`, `/sessionlist <other workspace>`, `/session <ID>` and
+  `/sessionarchive`: cross-workspace listing, adopting a Session and archiving or
+  stopping one are **owner only**, so a group cannot reach someone else's work.
+- "Allowed to chat" is not "allowed to run tools": a tool call started by a
+  non-owner needs the **owner's** approval; the requester approving their own
+  action no longer counts.
 - `dsh_im_return_file`: only files **inside the Session workspace** are sent;
   `~/.ssh`, `~/.dsh`, `id_rsa`, `.env`, `*.pem` and similar are refused.
 - `dsh_im_send`: every send asks the Host for approval (`allowed-once` only) and

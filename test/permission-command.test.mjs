@@ -73,13 +73,18 @@ test('numbered list is Host-owned and the unrestricted preset is refused from ch
   const refused = await f.run('/permission 2', { pendingInteraction: true });
   assert.match(refused.message, /不能切换到 danger-full-access/);
   assert.equal(f.calls.length, 0);
-  // A safe preset still switches in one invocation; numbers follow the list.
+  // `auto` widens the sandbox just like danger-full-access, so it is refused too.
   f.catalog([{ value: 'workspace-write' }, { value: 'auto' }]);
   await f.run('/permissionlist');
+  assert.match((await f.run('/permission 2')).message, /不能切换到 auto/);
+  assert.equal(f.calls.length, 0);
+  // A preset on the allow-list still switches in one invocation.
+  f.catalog([{ value: 'workspace-write' }, { value: 'read-only' }]);
+  await f.run('/permissionlist');
   const response = await f.run('/permission 2', { pendingInteraction: true });
-  assert.match(response.message, /已切换为：auto/);
+  assert.match(response.message, /已切换为：read-only/);
   assert.equal(f.calls.length, 1);
-  assert.equal(f.calls[0].line, '/permission auto');
+  assert.equal(f.calls[0].line, '/permission read-only');
   assert.ok(f.calls[0].request.signal instanceof AbortSignal);
 });
 
@@ -132,24 +137,33 @@ test('expired lists and invalid numbers never invoke a mutation', async (t) => {
   assert.equal(f.calls.length, 0);
 });
 
-test('removed presets are rejected by Host and never silently remapped', async () => {
+test('a preset outside the chat allow-list never reaches the Host', async () => {
   const f = fixture();
-  await f.run('/permissionlist');
   f.catalog([{ value: 'workspace-write' }, { value: 'MyPreset' }]);
   await f.run('/permissionlist');
-  f.catalog([{ value: 'workspace-write' }, { value: 'auto' }]);
-  // The number came from a stale list; the Host is asked and refuses it.
+  // The number came from the list, but the preset is not one a chat may select.
+  assert.match((await f.run('/permission 2')).message, /不能切换到 MyPreset/);
+  assert.equal(f.calls.length, 0);
+});
+
+test('removed presets are rejected by Host and never silently remapped', async () => {
+  const f = fixture();
+  f.catalog([{ value: 'workspace-write' }, { value: 'read-only' }]);
+  await f.run('/permissionlist');
+  // The Host drops read-only from its set; the stale number still names it.
+  f.catalog([{ value: 'workspace-write' }]);
   assert.match((await f.run('/permission 2')).message, /不存在或已不可用/);
   assert.equal(f.calls.length, 1);
-  assert.equal(f.calls[0].line, '/permission MyPreset');
+  assert.equal(f.calls[0].line, '/permission read-only');
 });
 
 test('full and numeric IDs work without a list and preserve case', async () => {
   const f = fixture();
-  f.catalog([{ value: 'MyPreset' }, { value: '123' }]);
-  await f.run('/PeRmIsSiOn MyPreset');
-  await f.run('/permission id:123');
-  assert.deepEqual(f.calls.map((call) => call.line), ['/permission MyPreset', '/permission 123']);
+  f.catalog([{ value: 'read-only' }, { value: 'workspace-write' }]);
+  await f.run('/PeRmIsSiOn read-only');
+  await f.run('/permission workspace-write');
+  assert.deepEqual(f.calls.map((call) => call.line),
+    ['/permission read-only', '/permission workspace-write']);
 });
 
 test('custom is display-only and malformed or duplicated options do not create wrong numbers', async () => {
@@ -184,11 +198,11 @@ test('Host rejection, unsupported command and uncertain writes never claim succe
   ]) {
     let calls = 0;
     f.session.executeCommand = async () => { calls++; return outcome; };
-    assert.doesNotMatch((await f.run('/permission auto')).message, /已切换为/);
+    assert.doesNotMatch((await f.run('/permission read-only')).message, /已切换为/);
     assert.equal(calls, 1);
   }
   f.session.executeCommand = async () => { throw new Error('token=secret'); };
-  const response = await f.run('/permission auto');
+  const response = await f.run('/permission read-only');
   assert.match(response.message, /未能确认/);
   assert.doesNotMatch(response.message, /secret/);
 });

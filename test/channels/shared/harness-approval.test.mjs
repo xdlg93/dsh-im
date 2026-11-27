@@ -1406,3 +1406,45 @@ test('a free-form argument string has its token pairs redacted too', () => {
   assert.equal(text.includes('abc123'), false);
   assert.match(text, /prod/);
 });
+
+test('a non-owner cannot approve the action they started themselves', async () => {
+  const queue = new HarnessApprovalQueue();
+  const decisions = [];
+  await queue.handleRequested(interaction({
+    id: 'self',
+    toolName: 'bash',
+    respond: async (result) => { decisions.push(result); },
+  }), { key: 'group:1', actor: 'STRANGER', send: async () => {} });
+
+  const isOwner = (who) => who === 'OWNER';
+  const notices = [];
+  // The stranger who triggered the tool call may not settle it themselves; the
+  // queue answers with a notice instead of a decision.
+  const self = queue.claimReply({
+    key: 'group:1', actor: 'STRANGER', text: '批准', addressed: true,
+    isQuestionPending: () => false, send: async (text) => { notices.push(text); }, isOwner,
+  });
+  assert.ok(self);
+  await self.process(async () => true);
+  assert.match(notices.at(-1), /只有机器人所有者/);
+  // The request stays pending for the owner: no decision was submitted.
+  assert.deepEqual(decisions, []);
+  assert.equal(queue.hasPending('group:1'), true);
+});
+
+test('a token budget is not treated as a credential', () => {
+  const payload = {
+    type: 'approval/requested', sessionId: 's', approvalId: 'a', callId: 'call-budget',
+    toolName: 'bash', reason: 'run',
+  };
+  const text = harnessApprovalText(payload, {
+    toolCall: {
+      callId: 'call-budget',
+      name: 'bash',
+      arguments: JSON.stringify({ maxTokens: 4096, apiKey: 'sk-secret' }),
+    },
+  });
+  assert.ok(text);
+  assert.match(text, /4096/);
+  assert.equal(text.includes('sk-secret'), false);
+});

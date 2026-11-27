@@ -18,7 +18,7 @@ function fixture(channel, canExecuteCommands = true) {
   const session = {
     sessionExists: async () => true,
     permissions: async () => ({ currentValue: 'workspace-write', options: [
-      { value: 'workspace-write' }, { value: 'auto' }, { value: 'danger-full-access' },
+      { value: 'workspace-write' }, { value: 'read-only' }, { value: 'danger-full-access' },
     ] }),
     executeCommand: async (line) => {
       commands.push(line);
@@ -54,17 +54,17 @@ for (const channel of ['qq']) {
   test(`${channel} dispatches numbered permission commands locally and deduplicates them`, async () => {
     const f = fixture(channel);
     await f.bridge.accept(f.event('list', '/permissionlist'));
-    assert.match(f.replies.at(-1), /2\. auto/);
+    assert.match(f.replies.at(-1), /2\. read-only/);
     assert.match(f.replies.at(-1), /3\. danger-full-access/);
     await f.bridge.accept(f.event('switch', '/permission 2'));
     await f.bridge.accept(f.event('switch', '/permission 2'));
-    assert.deepEqual(f.commands, ['/permission auto']);
-    assert.match(f.replies.at(-1), /已切换为：auto/);
+    assert.deepEqual(f.commands, ['/permission read-only']);
+    assert.match(f.replies.at(-1), /已切换为：read-only/);
     // The preset that disables the sandbox and the approval prompts stays a
     // Web-side action even for the owner in a chat.
     await f.bridge.accept(f.event('unrestricted', '/permission 3'));
     assert.match(f.replies.at(-1), /不能切换到 danger-full-access/);
-    assert.deepEqual(f.commands, ['/permission auto']);
+    assert.deepEqual(f.commands, ['/permission read-only']);
   });
 
   test(`${channel} gates permission queries and writes through command access`, async () => {
@@ -90,7 +90,7 @@ for (const channel of ['qq']) {
       await Promise.race([f.started, new Promise((_, reject) => setTimeout(() => reject(new Error('Turn did not start')), 2000).unref())]);
       await f.bridge.accept(f.event('running-list', '/permissionlist'));
       await f.bridge.accept(f.event('running-set', '/permission 2'));
-      assert.deepEqual(f.commands, ['/permission auto']);
+      assert.deepEqual(f.commands, ['/permission read-only']);
     } finally {
       f.finishTurn('done');
       await pending;

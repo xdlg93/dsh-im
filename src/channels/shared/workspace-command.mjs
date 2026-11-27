@@ -565,6 +565,12 @@ async function allWorkspacesSessionListing(harness, limit, conversationKey, { in
 async function runSessionListCommand(match, harness, conversationKey, access = workspaceCommandAccess()) {
   const request = parseSessionListArgument(match[1]);
   if (request.error) return commandResult(request.error);
+  // A selector names a workspace other than this chat's own, which would expose
+  // its Session titles and ids; only the owner may look across workspaces.
+  if (request.selector !== undefined && request.selector !== null && request.selector !== ''
+    && access.isOwner !== true) {
+    return commandResult(t('按工作区列出会话仅机器人所有者可用；不带参数只列当前工作区。'));
+  }
   // --all enumerates every Session of this Host, including other people's
   // conversations: only the account that scanned the bot may see that.
   if (request.all && access.isOwner !== true) {
@@ -892,7 +898,12 @@ async function runSessionBindCommand(command, harness, conversationKey, access =
  * cases that would leave this chat in a broken state, and reports what the Host
  * said.
  */
-async function runSessionArchiveCommand(command, harness, conversationKey) {
+async function runSessionArchiveCommand(command, harness, conversationKey, access = workspaceCommandAccess()) {
+  // The archive command scans every workspace and can stop a running turn, so it
+  // is reserved for the account that scanned the bot.
+  if (access.isOwner !== true) {
+    return commandResult(t('只有机器人所有者才能归档或停止会话。'));
+  }
   const match = SESSION_ARCHIVE_COMMAND.exec(command);
   const target = match?.[1];
   const stopActivity = Boolean(match?.[2]);
@@ -976,7 +987,7 @@ async function runSessionArchiveCommand(command, harness, conversationKey) {
   }
 }
 
-async function runConversationWorkspaceCommand(command, harness, conversationKey) {
+async function runConversationWorkspaceCommand(command, harness, conversationKey, access = workspaceCommandAccess()) {
   if (typeof harness?.currentConversationWorkspace !== 'function') {
     return commandResult(t('当前机器人暂不支持按对话设置专属工作区。'));
   }
@@ -1030,6 +1041,12 @@ async function runConversationWorkspaceCommand(command, harness, conversationKey
   if (typeof harness?.switchConversationWorkspace !== 'function') {
     return commandResult(t('当前机器人暂不支持设置对话工作区。'));
   }
+  // A per-conversation workspace moves the sandbox root exactly like /workspace,
+  // so it answers to the same owner and registered-root policy. Without this a
+  // non-owner could point the next Session at $HOME.
+  if (access.isOwner !== true) {
+    return commandResult(t('只有机器人所有者才能切换工作区。'));
+  }
   try {
     let selected = argument;
     if (/^\d+$/u.test(argument)) {
@@ -1041,6 +1058,8 @@ async function runConversationWorkspaceCommand(command, harness, conversationKey
       }
       selected = paths[position - 1];
     }
+    const refusal = workspaceSwitchRefusal(selected, access.workspaceRoots);
+    if (refusal) return commandResult(refusal);
     const current = await harness.switchConversationWorkspace(conversationKey, selected);
     return commandResult(t('当前对话工作区已切换为：{workspace}', { workspace: current }));
   } catch (error) {
@@ -1143,10 +1162,10 @@ export async function runWorkspaceCommand(text, harness, conversationKey, option
   const command = text.trim();
   const threadMatch = THREAD_WORKSPACE_COMMAND.exec(command);
   if (threadMatch) {
-    return runConversationWorkspaceCommand(command, harness, conversationKey);
+    return runConversationWorkspaceCommand(command, harness, conversationKey, access);
   }
   if (SESSION_ARCHIVE_PREFIX.test(command)) {
-    return runSessionArchiveCommand(command, harness, conversationKey);
+    return runSessionArchiveCommand(command, harness, conversationKey, access);
   }
   if (SESSION_BIND_PREFIX.test(command)) {
     return runSessionBindCommand(command, harness, conversationKey, access);

@@ -190,9 +190,9 @@ export async function readExactArtifactFile(handle, expectedSize, {
  * them to a message.
  */
 const ARTIFACT_SENSITIVE_SEGMENTS = Object.freeze([
-  '.ssh', '.dsh', '.gnupg', '.aws', '.config/gcloud', '.kube',
+  '.ssh', '.dsh', '.gnupg', '.aws', '.config/gcloud', '.kube', '.docker',
 ]);
-const ARTIFACT_SENSITIVE_NAME = /^(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|credentials?.*|\.?env(?:\..*)?|.*\.pem|.*\.key|.*\.p12|.*\.pfx|known_hosts|authorized_keys|.*\.netrc)$/iu;
+const ARTIFACT_SENSITIVE_NAME = /^(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|credentials?.*|\.?env(?:\..*)?|.*\.pem|.*\.key|.*\.p12|.*\.pfx|known_hosts|authorized_keys|\.?netrc|\.npmrc|\.git-credentials|\.pgpass|\.bash_history|\.zsh_history|hosts\.yml)$/iu;
 
 function sensitiveArtifactPath(canonicalPath) {
   const segments = canonicalPath.split('/').filter(Boolean);

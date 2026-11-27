@@ -7,29 +7,6 @@ function policyUsers(users) {
   return users.map((id) => ({ id, canExecuteCommands: true }));
 }
 
-function openScope(allowlistUsers = []) {
-  return createAccessPolicyScope({
-    mode: 'open',
-    open: {
-      defaultCanExecuteCommands: true,
-      commandPermissionOverrides: [],
-    },
-    allowlist: { users: policyUsers(allowlistUsers) },
-  });
-}
-
-/** Reachable by anyone, but no command execution: only for a bot with no owner. */
-function openScopeWithoutCommands() {
-  return createAccessPolicyScope({
-    mode: 'open',
-    open: {
-      defaultCanExecuteCommands: false,
-      commandPermissionOverrides: [],
-    },
-    allowlist: { users: [] },
-  });
-}
-
 function allowlistScope(users = []) {
   return createAccessPolicyScope({
     mode: 'allowlist',
@@ -70,11 +47,12 @@ export function initialAccessPolicyFor(channel, config = {}) {
     // The owner is a Host-only identity (privilegedSenderIdsFor), never copied
     // into the saved policy row, so the allowlist itself stays empty: the owner
     // still passes as a privileged sender, everyone else is refused.
-    // The wildcard means "the previous build put no owner on this bot": keep the
-    // old chat reachability but never grant command execution with it.
-    const wildcard = cleanIds(config.ownerUserOpenid).includes('*');
+    // A bot with no recorded owner (the legacy `*` wildcard) used to accept chat
+    // from anyone. "Chat" is not a safe boundary here: an allowed message can
+    // still drive tools, so the migration closes the bot and asks the operator to
+    // re-scan, which records a real owner identity.
     return createAccessPolicy({
-      direct: wildcard ? openScopeWithoutCommands() : allowlistScope(),
+      direct: allowlistScope(),
       group: allowlistScope(),
     });
   }

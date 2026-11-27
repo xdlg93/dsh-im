@@ -172,3 +172,53 @@ test('a delivered file must come from the workspace and not look like a credenti
   tool.onResult(accepted, { isError: false });
   assert.equal(registry.take('session-artifact', 1).length, 1);
 });
+
+test('/conv obeys the same owner and root policy as /workspace', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-im-conv-'));
+  const allowed = join(root, 'allowed');
+  await mkdir(allowed);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const switched = [];
+  const harness = {
+    currentConversationWorkspace: () => allowed,
+    hasConversationWorkspaceOverride: () => false,
+    async switchConversationWorkspace(key, path) { switched.push(path); return path; },
+    async listWorkspaces() { return [allowed]; },
+  };
+  const stranger = await runWorkspaceCommand(`/conv ${join(root, 'elsewhere')}`, harness, 'chat', {
+    isOwner: false, workspaceRoots: [allowed],
+  });
+  assert.match(stranger.message, /只有机器人所有者/u);
+
+  const outside = await runWorkspaceCommand(`/conv ${join(root, 'elsewhere')}`, harness, 'chat', {
+    isOwner: true, workspaceRoots: [allowed],
+  });
+  assert.match(outside.message, /只能在已注册的 DSH 工作区之间切换/u);
+
+  const rootSwitch = await runWorkspaceCommand('/conv /', harness, 'chat', {
+    isOwner: true, workspaceRoots: [allowed],
+  });
+  assert.match(rootSwitch.message, /不能把系统目录设为工作区/u);
+  assert.deepEqual(switched, []);
+});
+
+test('archiving a Session and listing another workspace need the owner', async () => {
+  const archived = [];
+  const harness = {
+    async listWorkspaceSessions() { return { workspace: '/tmp/project', sessions: [] }; },
+    async listWorkspaces() { return ['/tmp/project']; },
+    async currentWorkspace() { return '/tmp/project'; },
+    async archiveWorkspaceSession(id) { archived.push(id); return { sessionId: id }; },
+  };
+  const strangerArchive = await runWorkspaceCommand('/sessionarchive session-victim', harness, 'chat', {
+    isOwner: false, workspaceRoots: [],
+  });
+  assert.match(strangerArchive.message, /只有机器人所有者才能归档或停止会话/u);
+  assert.deepEqual(archived, []);
+
+  const strangerList = await runWorkspaceCommand('/sessionlist /home/someone', harness, 'chat', {
+    isOwner: false, workspaceRoots: [],
+  });
+  assert.match(strangerList.message, /按工作区列出会话仅机器人所有者可用/u);
+});

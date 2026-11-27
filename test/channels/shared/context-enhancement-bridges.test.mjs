@@ -125,7 +125,9 @@ function fixture(channel, { contextEnhancement, onAsk, busyMessageMode = 'queue'
         inboundFiles: (event) => event.item_list.filter((item) => item.file_item).map(file),
       } });
   } else {
-    bridge = new QqHarnessBridge({ ...dependencies, ownerUserOpenid: '*', bot: { sendText },
+    // The fixture's sender is the scanner: approvals from a non-owner requester
+    // are escalated, so the test must act as the owner.
+    bridge = new QqHarnessBridge({ ...dependencies, ownerUserOpenid: 'actor', bot: { sendText },
       fetchImpl: async (url) => {
         calls.push(['fetch', String(url)]);
         const isImage = String(url).endsWith('.png');

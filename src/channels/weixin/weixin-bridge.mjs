@@ -541,6 +541,8 @@ export class WeixinHarnessBridge {
         : null,
       isQuestionPending: () => this.#pendingInteractions.has(key),
       send: (text) => this.#send(sender, text, contextToken, runId),
+      // Only the scanner's own approval settles a request it did not make.
+      isOwner: (who) => nonEmptyString(who) === this.#ownerUserId,
     });
     if (approval) {
       let task;

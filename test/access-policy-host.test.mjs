@@ -48,16 +48,17 @@ test('Host initialization preserves each channel access baseline', () => {
   // Host's shell, so reachability is opt-in.
   assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }),
     policy(allowlist(), allowlist()));
-  // The legacy wildcard owner keeps chat reachability without command execution.
-  assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: '*' }),
-    policy(open([], false), allowlist()));
+  // A bot with no recorded owner is closed too: chat alone is not a safe
+  // boundary, because an allowed message can still drive tools.
+  assert.deepEqual(initialAccessPolicyFor('qq', { ownerUserOpenid: '*'}),
+    policy(allowlist(), allowlist()));
 });
 
 test('new bots start closed on both channels, for QR and manual binding alike', () => {
   assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: 'qq-owner' }),
     policy(allowlist(), allowlist()));
   assert.deepEqual(newBotAccessPolicyFor('qq', { ownerUserOpenid: '*' }),
-    policy(open([], false), allowlist()));
+    policy(allowlist(), allowlist()));
   assert.deepEqual(newBotAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }),
     initialAccessPolicyFor('weixin', { ownerUserId: 'wx-owner' }));
 });

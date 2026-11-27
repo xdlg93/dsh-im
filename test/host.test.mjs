@@ -125,10 +125,8 @@ test('Host composes every IM channel inside one plugin context', async () => {
     'typertGateway',
     // Declared so the plugin can read the Host Workspace list through ctx.get.
     'workspaceRegistry',
-    // Declared so a proactive send can ask the user before it leaves the machine.
-    'approval',
-    // Declared so an update can run through the Host's own plugin manager.
-    'pluginManager',
+    // approval and pluginManager are optional: read through ctx.get() after a
+    // nested inject, so a profile without them still loads the plugin.
   ]);
   assert.deepEqual(calls, [
     ['weixin', ctx, { groupByAgentPreset: true, ...config.weixin, rpcAuthority: 'trusted-host', deliveryService }],

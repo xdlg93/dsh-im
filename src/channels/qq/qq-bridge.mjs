@@ -723,6 +723,9 @@ export class QqHarnessBridge {
         : null,
       isQuestionPending: () => this.#pendingInteractions.has(key),
       send: (text) => this.#bot.sendText(message.replyTarget, text),
+      // Only the scanner's own approval settles a request it did not make.
+      isOwner: (who) => this.#ownerUserOpenid !== '*'
+        && nonEmptyString(who) === this.#ownerUserOpenid,
     });
     if (approval) {
       let task;

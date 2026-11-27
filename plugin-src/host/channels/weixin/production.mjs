@@ -76,6 +76,21 @@ function diagnosticWorkspaces(store) {
   });
 }
 
+/**
+ * Directories the chat commands may switch into.
+ *
+ * The Host's registered workspaces plus the bot's own default and ungrouped
+ * directories; anything else is refused by the command layer, which is what keeps
+ * a chat message from redefining the sandbox root.
+ */
+function workspaceRoots(config, ctx) {
+  const roots = new Set(dshWorkspacePaths(ctx));
+  for (const path of [config.workspace, config.defaultWorkspace]) {
+    if (typeof path === 'string' && path.startsWith('/')) roots.add(path);
+  }
+  return [...roots];
+}
+
 export async function createProductionController(ctx, config = {}, internals = {}) {
   if (!ctx?.credentials) throw new TypeError('dsh-weixin requires ctx.credentials');
   const connection = harnessConnection(ctx, config, { competitiveApprovals: true });
@@ -200,7 +215,9 @@ export async function createProductionController(ctx, config = {}, internals = {
       return new Runtime({
         diagnostics,
         api,
-        config: accountConfig,
+        // The command layer refuses a switch it cannot verify, so the runtime
+        // needs the directories this Host treats as workspaces.
+        config: { ...accountConfig, workspaceRoots: workspaceRoots(config, ctx) },
         token,
         harness: workspaceScope.harness,
         state: workspaceScope.state,
