@@ -15,11 +15,17 @@ const EMPTY_STATE = Object.freeze({
   recentOutboundMessages: [],
 });
 
-export const WEIXIN_RECENT_OUTBOUND_LIMIT = 200;
-export const WEIXIN_RECENT_OUTBOUND_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
-export const WEIXIN_RECENT_OUTBOUND_TEXT_LIMIT = 8_000;
+// The recent-outbound ring exists to attribute a provider message id and to avoid
+// echoing our own text; it does not need a month of chat history, so it keeps a
+// small window. Bodies are stored in the account state file (0600) and this is
+// the only place the plugin persists message text.
+export const WEIXIN_RECENT_OUTBOUND_LIMIT = 20;
+export const WEIXIN_RECENT_OUTBOUND_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+export const WEIXIN_RECENT_OUTBOUND_TEXT_LIMIT = 2_000;
 export const WEIXIN_RECENT_OUTBOUND_MATCH_TOLERANCE_MS = 15_000;
-const CONTEXT_TOKEN_LIMIT = 1_000;
+const CONTEXT_TOKEN_LIMIT = 200;
+// A context token only continues a conversation session; an unused one is stale.
+const CONTEXT_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 // A proactive message that iLink refused because the conversation session had
 // expired is worth keeping: the session reopens as soon as the recipient writes
 // again, and the message is delivered then. The queue is bounded so a bot that
@@ -45,8 +51,11 @@ function sequence(value) {
 function normalizeContextTokens(value) {
   if (!value || typeof value !== 'object' || !/^[a-f0-9]{64}$/.test(value.credentialHash ?? '')) return undefined;
   const users = Object.create(null);
+  const now = Date.now();
   for (const [userId, entry] of Object.entries(value.users ?? {}).slice(-CONTEXT_TOKEN_LIMIT)) {
     if (!nonEmptyString(userId) || !nonEmptyString(entry?.token)) continue;
+    // Drop tokens nothing has refreshed for a week: they cannot open a session.
+    if (Number.isFinite(entry?.receivedAt) && now - entry.receivedAt > CONTEXT_TOKEN_TTL_MS) continue;
     users[userId] = {
       token: entry.token,
       seq: sequence(entry.seq),

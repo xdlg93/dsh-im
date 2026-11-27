@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { mkdtemp, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -868,21 +869,21 @@ test('an install that cannot reach git falls back to the release tarball', async
               source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: f.state.commit },
               engines: { dsh: '^0.2.2-rc.5' },
               tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
+              tgzSha256: createHash('sha256').update(Buffer.from('fallback-tarball')).digest('hex'),
             }],
           }],
         }));
       }
-      throw new Error('unexpected fetch');
+      return new Response(Buffer.from('fallback-tarball'));
     },
   });
   t.after(() => service.close());
   const { checkId } = await service.check();
   await service.install({ checkId, requestId: 'fallback' });
   const finished = await waitForJob(service, 'restart-required');
-  assert.deepEqual(calls, [
-    `git+https://github.com/xdlg93/dsh-im.git#${f.state.commit}`,
-    'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
-  ]);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0], `git+https://github.com/xdlg93/dsh-im.git#${f.state.commit}`);
+  assert.match(calls[1], /^file:.*dsh-im-3\.0\.8\.tgz$/u);
   assert.equal(finished.job.installSource, 'tgz');
   assert.equal(finished.job.fellBack, true);
 });
@@ -890,6 +891,8 @@ test('an install that cannot reach git falls back to the release tarball', async
 test('a tarball install updates from the tarball first', async (t) => {
   const f = await fixture(t, { environment: { installChannel: 'tgz' } });
   const calls = [];
+  const tarball = Buffer.from('release-tarball');
+  const digest = createHash('sha256').update(tarball).digest('hex');
   const runtime = {
     inspect: async () => ({ ...f.environment }),
     install: async (version, { spec }) => {
@@ -916,18 +919,115 @@ test('a tarball install updates from the tarball first', async (t) => {
               source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: f.state.commit },
               engines: { dsh: '^0.2.2-rc.5' },
               tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz',
+              tgzSha256: digest,
             }],
           }],
         }));
       }
-      throw new Error('unexpected fetch');
+      return new Response(tarball, { headers: { 'content-length': String(tarball.length) } });
     },
   });
   t.after(() => service.close());
   const { checkId } = await service.check();
   await service.install({ checkId, requestId: 'tgz-first' });
   const finished = await waitForJob(service, 'restart-required');
-  assert.deepEqual(calls, ['https://xdlg93.github.io/dsh-im/pkg/dsh-im-3.0.8.tgz']);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /^file:.*dsh-im-3\.0\.8\.tgz$/u);
   assert.equal(finished.job.installSource, 'tgz');
   assert.notEqual(finished.job.fellBack, true, 'the preferred channel needed no fallback');
+});
+
+test('a tarball install is verified against the digest the index publishes', async (t) => {
+  const tarball = Buffer.from('fake-release-tarball');
+  const digest = createHash('sha256').update(tarball).digest('hex');
+  const installed = [];
+  const runtime = {
+    inspect: async () => ({ ...environment }),
+    install: async (version, { spec }) => {
+      installed.push({ version, spec });
+      environment.installedVersion = version;
+      environment.installationKey = 'installed';
+    },
+  };
+  const environment = {
+    homeDir: '/tmp/home', profileDir: '/tmp/home/profiles/web', profileName: 'web',
+    environmentKind: 'cli', installedVersion: '1.3.0', eligible: true, packageValid: true,
+    blockedReason: null, installationKey: 'key', installChannel: 'tgz',
+  };
+  const service = createUpdateService({
+    runtime,
+    runningVersion: '1.3.0',
+    nodeVersion: '22.20.0',
+    fetchImpl: async (url) => {
+      if (url === RELEASE_INDEX_URL) {
+        return new Response(JSON.stringify({
+          format: 1,
+          plugins: [{
+            name: PACKAGE_NAME,
+            metadata: { keywords: [] },
+            versions: [{
+              version: '1.3.1',
+              publishTimestamp: 1,
+              source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: 'e'.repeat(40) },
+              engines: { dsh: '^0.2.2-rc.5' },
+              tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz',
+              tgzSha256: digest,
+            }],
+          }],
+        }));
+      }
+      return new Response(tarball, { headers: { 'content-length': String(tarball.length) } });
+    },
+  });
+  t.after(() => service.close());
+  const { checkId } = await service.check();
+  await service.install({ checkId, requestId: 'verified' });
+  await waitForJob(service, 'restart-required');
+  assert.equal(installed.length, 1);
+  // The installer receives the verified local file, not the remote URL.
+  assert.match(installed[0].spec, /^file:.*dsh-im-1\.3\.1\.tgz$/u);
+});
+
+test('a tarball whose digest does not match is never installed', async (t) => {
+  const installed = [];
+  const environment = {
+    homeDir: '/tmp/home', profileDir: '/tmp/home/profiles/web', profileName: 'web',
+    environmentKind: 'cli', installedVersion: '1.3.0', eligible: true, packageValid: true,
+    blockedReason: null, installationKey: 'key', installChannel: 'tgz',
+  };
+  const runtime = {
+    inspect: async () => ({ ...environment }),
+    install: async (version, { spec }) => { installed.push({ version, spec }); },
+  };
+  const service = createUpdateService({
+    runtime,
+    runningVersion: '1.3.0',
+    nodeVersion: '22.20.0',
+    fetchImpl: async (url) => {
+      if (url === RELEASE_INDEX_URL) {
+        return new Response(JSON.stringify({
+          format: 1,
+          plugins: [{
+            name: PACKAGE_NAME,
+            metadata: { keywords: [] },
+            versions: [{
+              version: '1.3.1',
+              publishTimestamp: 1,
+              source: { type: 'git', url: 'https://github.com/xdlg93/dsh-im.git', commit: 'f'.repeat(40) },
+              engines: { dsh: '^0.2.2-rc.5' },
+              tgz: 'https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.1.tgz',
+              tgzSha256: 'a'.repeat(64),
+            }],
+          }],
+        }));
+      }
+      return new Response(Buffer.from('tampered'));
+    },
+  });
+  t.after(() => service.close());
+  const { checkId } = await service.check();
+  await service.install({ checkId, requestId: 'tampered' });
+  const failed = await waitForJob(service, 'failed');
+  assert.equal(failed.job.state, 'failed');
+  assert.equal(installed.length, 0);
 });

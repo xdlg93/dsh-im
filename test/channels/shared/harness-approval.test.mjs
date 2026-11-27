@@ -1362,3 +1362,47 @@ test('an interactive presentation suppresses the type-a-reply prompt for ordinar
   assert.deepEqual(sent, [], 'a button card must not ask the user to type the decision');
   assert.equal(queue.hasPending('direct:actor-a'), true, 'no decision was submitted');
 });
+
+test('an approval card never echoes a credential from the tool arguments', () => {
+  const payload = {
+    type: 'approval/requested',
+    sessionId: 'session-1',
+    approvalId: 'approval-1',
+    callId: 'call-secret',
+    toolName: 'bash',
+    reason: 'run a command',
+  };
+  const toolCall = {
+    callId: 'call-secret',
+    name: 'bash',
+    arguments: JSON.stringify({
+      command: 'curl -H "Authorization: Bearer sk-live-123" https://example.test',
+      apiKey: 'sk-should-not-appear',
+      nested: { password: 'hunter2', safe: 'visible' },
+    }),
+  };
+  const text = harnessApprovalText(payload, { toolCall });
+  assert.ok(text);
+  for (const secret of ['sk-live-123', 'sk-should-not-appear', 'hunter2']) {
+    assert.equal(text.includes(secret), false, secret);
+  }
+  assert.match(text, /visible/);
+  assert.match(text, /已隐藏|hidden/u);
+});
+
+test('a free-form argument string has its token pairs redacted too', () => {
+  const payload = {
+    type: 'approval/requested',
+    sessionId: 'session-1',
+    approvalId: 'approval-2',
+    callId: 'call-plain',
+    toolName: 'bash',
+    reason: 'run',
+  };
+  const text = harnessApprovalText(payload, {
+    toolCall: { callId: 'call-plain', name: 'bash', arguments: 'deploy --token=abc123 --env=prod' },
+  });
+  assert.ok(text);
+  assert.equal(text.includes('abc123'), false);
+  assert.match(text, /prod/);
+});

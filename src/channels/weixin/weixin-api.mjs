@@ -6,6 +6,7 @@ import {
   randomUUID,
 } from 'node:crypto';
 
+import manifest from '../../../package.json' with { type: 'json' };
 import { fetchImageBuffer } from '../shared/image-prompt.mjs';
 
 export const WEIXIN_QR_BASE_URL = 'https://ilinkai.weixin.qq.com/';
@@ -15,6 +16,8 @@ export const WEIXIN_CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
 export const DEFAULT_WEIXIN_MAX_MESSAGE_CHARS = 1_800;
 
 const WEIXIN_CDN_HOST = 'novac2c.cdn.weixin.qq.com';
+/** Largest inbound WeChat file this client will pull into memory. */
+const WEIXIN_INBOUND_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 const ILINK_APP_ID = 'bot';
 const ILINK_CLIENT_VERSION = (2 << 16) | (4 << 8) | 6;
@@ -206,21 +209,28 @@ export function extractWeixinImages(message, { fetchImpl = fetch } = {}) {
   return images;
 }
 
-async function fetchWeixinFileCiphertext(url, { fetchImpl, signal }) {
-  const response = await fetchImpl(new URL(url), {
-    method: 'GET',
-    signal,
-    redirect: 'manual',
-  });
-  if (!response?.ok) {
-    await response?.body?.cancel?.().catch?.(() => undefined);
+/**
+ * Download one inbound file through the guarded fetch used for images.
+ *
+ * The URL comes from the platform payload, so it is HTTPS-only, restricted to the
+ * WeChat CDN host, blocked from redirecting, and capped in size; an unbounded
+ * `arrayBuffer()` would let a large or forged payload exhaust memory.
+ */
+async function fetchWeixinFileCiphertext(url, { fetchImpl, signal, maxBytes }) {
+  try {
+    return await fetchImageBuffer(url, {
+      fetchImpl,
+      signal,
+      maxBytes: maxBytes ?? WEIXIN_INBOUND_FILE_MAX_BYTES,
+      allowedHosts: [WEIXIN_CDN_HOST],
+    });
+  } catch (error) {
     throw new WeixinApiError(
       'file-download-failed',
-      `微信文件下载失败（HTTP ${response?.status ?? 'unknown'}）。`,
-      { status: response?.status },
+      `微信文件下载失败：${error?.message ?? 'unknown error'}`,
+      { status: error?.status },
     );
   }
-  return Buffer.from(await response.arrayBuffer());
 }
 
 /** Convert native iLink file items into lazily downloaded, decrypted file references. */
@@ -234,11 +244,11 @@ export function extractWeixinFiles(message, { fetchImpl = fetch } = {}) {
     files.push({
       name: nonEmptyString(fileItem.file_name) ?? (files.length === 0 ? 'file' : `file-${files.length + 1}`),
       ...(Number.isFinite(declaredSize) && declaredSize >= 0 ? { size: declaredSize } : {}),
-      load: async ({ signal } = {}) => {
+      load: async ({ signal, maxBytes } = {}) => {
         signal?.throwIfAborted();
         const key = parseWeixinImageAesKey(fileItem);
         const url = weixinImageDownloadUrl(fileItem.media);
-        const ciphertext = await fetchWeixinFileCiphertext(url, { fetchImpl, signal });
+        const ciphertext = await fetchWeixinFileCiphertext(url, { fetchImpl, signal, maxBytes });
         signal?.throwIfAborted();
         return decryptWeixinImage(ciphertext, key);
       },
@@ -305,10 +315,13 @@ function authenticatedHeaders(token) {
   return headers;
 }
 
-function baseInfo() {
+/** The client identity iLink sees. It names this plugin, not a fork of upstream. */
+export const WEIXIN_BOT_AGENT = `DeepSeekHarness/dsh-im-${manifest.version}`;
+
+function baseInfo(botAgent = WEIXIN_BOT_AGENT) {
   return {
     channel_version: WEIXIN_PROTOCOL_VERSION,
-    bot_agent: 'DeepSeekHarness/1.1.0',
+    bot_agent: botAgent,
   };
 }
 
@@ -523,9 +536,15 @@ function validateLoginResponse(value) {
   return value;
 }
 
-export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl } = {}) {
+export function createWeixinApi({
+  fetchImpl = fetch,
+  uploadFetchImpl = fetchImpl,
+  // Operators can pin the announced client id if the platform asks for one.
+  botAgent = WEIXIN_BOT_AGENT,
+} = {}) {
   if (typeof fetchImpl !== 'function') throw new TypeError('fetchImpl must be a function');
   if (typeof uploadFetchImpl !== 'function') throw new TypeError('uploadFetchImpl must be a function');
+  const info = () => baseInfo(botAgent);
 
   async function sendArtifact({
     baseUrl,
@@ -563,7 +582,7 @@ export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl
           filesize: aesEcbPaddedSize(file.bytes.byteLength),
           no_need_thumb: true,
           aeskey: aesKey.toString('hex'),
-          base_info: baseInfo(),
+          base_info: info(),
         },
       });
     } catch (error) {
@@ -627,7 +646,7 @@ export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl
             ...(nonEmptyString(contextToken) ? { context_token: contextToken.trim() } : {}),
             ...(nonEmptyString(runId) ? { run_id: runId.trim() } : {}),
           },
-          base_info: baseInfo(),
+          base_info: info(),
         },
       });
     } catch (error) {
@@ -721,7 +740,7 @@ export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl
         body: {
           ilink_user_id: recipient,
           ...(nonEmptyString(contextToken) ? { context_token: contextToken.trim() } : {}),
-          base_info: baseInfo(),
+          base_info: info(),
         },
       });
       if (response?.ret !== undefined && response.ret !== 0) {
@@ -746,7 +765,7 @@ export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl
           ilink_user_id: recipient,
           typing_ticket: ticket,
           status,
-          base_info: baseInfo(),
+          base_info: info(),
         },
       });
       if (response?.ret !== undefined && response.ret !== 0) {
@@ -777,7 +796,7 @@ export function createWeixinApi({ fetchImpl = fetch, uploadFetchImpl = fetchImpl
             ...(nonEmptyString(contextToken) ? { context_token: contextToken.trim() } : {}),
             ...(nonEmptyString(runId) ? { run_id: runId.trim() } : {}),
           },
-          base_info: baseInfo(),
+          base_info: info(),
         },
       }), { signal });
       const sendRejection = rejectedProviderResponse(response);

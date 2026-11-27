@@ -330,12 +330,26 @@ Both channels share the session binding, command, context enhancement, group his
 
 When `DSH_HOME` is set, it replaces `~/.dsh` above; the plugin's own `dshHome` option wins over both.
 
+### Dependencies and supply chain
+
+- QQ QR login depends on `@tencent-connect/qqbot-connector`, published as minified
+  `dist` under `UNLICENSED` with no `repository` field, so an upgrade is a code
+  change nobody can review in a diff. This repository pins the exact version
+  (`1.2.0`), the lockfile keeps its `sha512` integrity, and
+  `test/dependency-pins.test.mjs` fails if a range ever replaces the pin.
+- `@tencent-connect/qqbot-nodejs` (MIT, official repository), `qrcode` and
+  `undici` are pinned exactly as well.
+- The WeChat iLink protocol is an independent implementation and **not a
+  Tencent-endorsed client**. Requests announce `DeepSeekHarness/dsh-im-<version>`,
+  which the `botAgent` plugin option can override; a protocol or policy change on
+  the platform may require a follow-up here.
+
 Privacy and security boundaries:
 
 - QR-scanned tokens and secrets go only to the local Harness Host and its protected credential store. The browser sees QR codes, masked state, and the bot list; no RPC response ever returns raw credentials.
 - Bot state files keep session bindings, `senderId`, and "is this a bot" identity only — never message text.
 - Group history stores only messages and attachments that were actually received, shared per group and rolled off by retention days.
-- The proactive-delivery HTTP endpoint adds no application-level authentication; use it only on the local machine or a trusted network, never expose it to the public internet.
+- The management and delivery HTTP endpoints reuse DSH's browser authentication (an anonymous request gets 401); use them only on the local machine or a trusted network, never expose them to the public internet.
 
 ## Troubleshooting
 

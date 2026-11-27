@@ -19,14 +19,16 @@ async function fixture(t, options = {}) {
   let now = base;
   const store = new GroupHistoryStore(root, { now: () => now, logger: { warn() {} }, ...options });
   t.after(async () => { await store.close(); await rm(root, { recursive: true, force: true }); });
+  // Recording is opt-in now; these tests exercise the enabled archive.
+  await store.setEnabled({ enabled: true, attachments: true });
   const group = await store.capture(entry('expired-bootstrap', { sentAt: base - 15 * DAY }));
   return { root, store, groupId: group.groupId, advance: (ms) => { now += ms; } };
 }
 
-test('silent capture is on by default, shared across bots, deduplicated and independent of sessions', async (t) => {
+test('silent capture is opt-in, shared across bots, deduplicated and independent of sessions', async (t) => {
   const { store, groupId } = await fixture(t);
   assert.equal((await store.query(groupId)).items.length, 0);
-  assert.equal((await store.settings()).groupHistoryRetentionDays, 14);
+  assert.equal((await store.settings()).groupHistoryRetentionDays, 7);
   let downloads = 0;
   await store.capture(entry('m1'));
   await store.capture(entry('m1', { attachments: [{ key: 'file:0', name: 'a.txt', load: async () => {
@@ -109,7 +111,27 @@ test('corrupt retention settings fail closed and can be repaired explicitly', as
   assert.ok((await store.sweep()).error);
   await assert.rejects(store.query('group'), /暂停自动清理/);
   await store.setRetentionDays(30);
-  assert.deepEqual(await store.settings(), { groupHistoryRetentionDays: 30 });
+  // Recording stays off until it is turned on explicitly.
+  assert.deepEqual(await store.settings(), {
+    groupHistoryRetentionDays: 30,
+    groupHistoryEnabled: false,
+    groupHistoryAttachments: false,
+  });
+});
+
+test('nothing is recorded until the archive is turned on', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-group-history-off-'));
+  const store = new GroupHistoryStore(root);
+  t.after(async () => { await store.close(); await rm(root, { recursive: true, force: true }); });
+  assert.deepEqual(await store.settings(), {
+    groupHistoryRetentionDays: 7,
+    groupHistoryEnabled: false,
+    groupHistoryAttachments: false,
+  });
+  // A disabled archive creates no group and stores no message.
+  assert.equal(await store.capture(entry('off-1')), null);
+  const groups = await store.query('qq-group').catch(() => ({ items: [] }));
+  assert.deepEqual(groups.items ?? [], []);
 });
 
 test('queries paginate within byte budget and reject cross-group cursors', async (t) => {

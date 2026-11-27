@@ -20,6 +20,13 @@ function deliveryError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
+/**
+ * One delivery target as the model sees it.
+ *
+ * The platform route (openid, group id, session ref) stays on the Host: the model
+ * only needs the opaque `botId` + `targetId` pair to send, and a route in the
+ * context would hand contact identifiers to the model provider.
+ */
 function targetSummary(botId, channel, target) {
   return {
     botId,
@@ -27,7 +34,6 @@ function targetSummary(botId, channel, target) {
     targetId: target?.targetId,
     name: target?.name ?? null,
     kind: target?.kind ?? null,
-    route: target?.route ?? null,
   };
 }
 
@@ -127,7 +133,7 @@ export function createProactiveSendTools({ deliveryService, approval, unattended
   return [
     {
       name: LIST_TOOL,
-      description: 'List the IM delivery targets configured for this DSH profile (WeChat users, QQ users and groups) so a message can be pushed proactively. Returns botId, channel, targetId, name, kind and route for each target. Call this before dsh_im_send when the target id is unknown.',
+      description: 'List the IM delivery targets configured for this DSH profile (WeChat users, QQ users and groups) so a message can be pushed proactively. Returns botId, channel, targetId, name and kind for each target; the platform route stays on the Host. Call this before dsh_im_send when the target id is unknown.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: textOutput,
       execute: async () => {

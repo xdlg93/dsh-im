@@ -388,7 +388,7 @@ test('QQ does not file-fallback after an uncertain native image send', async (t)
   assert.equal(receipt.artifacts[0].outcome, 'unknown');
 });
 
-test('QQ normalizes protocol-relative ordinary-file URLs and lets the CDN redirect', async () => {
+test('QQ normalizes protocol-relative file URLs and refuses a foreign host', async () => {
   const bytes = Buffer.from('qq-native-file');
   const calls = [];
   const inbound = qqInboundMessage(message({
@@ -413,11 +413,32 @@ test('QQ normalizes protocol-relative ordinary-file URLs and lets the CDN redire
   assert.equal(inbound.files[0].mediaType, 'application/pdf');
   assert.equal(inbound.files[0].size, bytes.length);
   assert.equal(calls.length, 0, 'file download stays lazy');
+  // A file URL is only fetched from the platform's own media hosts, with
+  // redirects disabled, so a forged payload cannot reach an internal address.
+  await assert.rejects(inbound.files[0].load({}), /not hosted by the messaging platform/u);
+  assert.equal(calls.length, 0);
+});
+
+test('QQ downloads a native file from its own media host without following redirects', async () => {
+  const bytes = Buffer.from('qq-native-file');
+  const calls = [];
+  const inbound = qqInboundMessage(message({
+    attachments: [{
+      content_type: 'application/pdf',
+      filename: 'QQ 报告.pdf',
+      size: bytes.length,
+      url: 'https://multimedia.nt.qq.com.cn/download/opaque',
+    }],
+  }), {
+    fetchImpl: async (url, init) => {
+      calls.push({ url: url.toString(), init });
+      return new Response(bytes, { headers: { 'content-length': String(bytes.length) } });
+    },
+  });
   assert.deepEqual(await inbound.files[0].load({}), bytes);
-  assert.deepEqual(calls, [{
-    url: 'https://provider-issued-download.example/native-file',
-    init: { method: 'GET', signal: undefined, redirect: 'follow' },
-  }]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.redirect, 'manual');
+  assert.equal(calls[0].url, 'https://multimedia.nt.qq.com.cn/download/opaque');
 });
 
 test('QQ does not duplicate image attachments in ordinary files', () => {
@@ -466,7 +487,7 @@ test('QQ bridge hands a native non-image attachment to the current Harness turn'
     attachments: [{
       content_type: 'application/octet-stream',
       filename: 'QQ报告.bin',
-      url: 'https://provider-issued-download.example/qq-file',
+      url: 'https://multimedia.nt.qq.com.cn/qq-file',
     }],
   }));
 
@@ -513,7 +534,7 @@ test('QQ starts an ordinary-file download before an earlier queued turn finishes
     attachments: [{
       content_type: 'application/octet-stream',
       filename: 'queued.bin',
-      url: '//provider-issued-download.example/queued-file',
+      url: '//multimedia.nt.qq.com.cn/queued-file',
     }],
   }));
 

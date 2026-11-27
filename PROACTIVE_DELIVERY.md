@@ -389,7 +389,7 @@ HTTP 接口只在当前 Host 提供 WebServer 时注册，并使用同一个监�
     host: '0.0.0.0'
 ```
 
-这会同时扩大该 WebServer 上其他页面和路由的网络可达范围。当前主动投递 HTTP 接口没有鉴权，因此只能配合可信局域网、防火墙或反向代理使用，不能直接暴露到公网。
+这会同时扩大该 WebServer 上其他页面和路由的网络可达范围。主动投递 HTTP 接口沿用 DSH WebServer 的浏览器鉴权：请求必须带上已登录的浏览器会话（Cookie 或等价凭据），未登录请求返回 401，未通过 Host/Origin 校验返回 403；它本身不做额外的应用层鉴权，因此仍然只能配合可信局域网、防火墙或反向代理使用，不能直接暴露到公网。
 
 Connection RPC 默认只允许当前 Host 的回环调用。若 Web profile 明确运行在受信任局域网，可在该 profile 的 `cordis.patch.yml` 中复用现有 Host authority：
 

@@ -185,7 +185,7 @@ The body requires `botId`, `targetId`, and `text`, and accepts an optional `form
 
 The path is fixed at `POST /api/dsh-im/delivery/messages` and reuses the current DSH Host WebServer, so it opens no extra port. The `3080` above is the default Web profile port; use whatever address the Host prints at startup.
 
-The HTTP endpoint has no authentication and no CORS. Use it only on the local machine or a trusted network, and never expose it to the public internet.
+The HTTP endpoint reuses the DSH WebServer's browser authentication: a request must carry a signed-in browser session (its cookie or an equivalent credential), an anonymous request gets 401, and a request that fails the Host/Origin check gets 403. It adds no application-level authentication of its own and sends no CORS headers, so still use it only on the local machine or a trusted network, never on the public internet.
 
 ## Send from a plugin in the same Host
 
@@ -389,7 +389,7 @@ The HTTP endpoint is registered only when the current Host provides a WebServer,
     host: '0.0.0.0'
 ```
 
-That also widens network reachability for every other page and route on the same WebServer. The proactive delivery endpoint has no authentication, so pair it with a trusted LAN, a firewall, or a reverse proxy — never expose it to the public internet.
+That also widens network reachability for every other page and route on the same WebServer. The delivery endpoint relies on the DSH WebServer's browser authentication (401 without a signed-in session, 403 when the Host/Origin check fails) and adds no authentication of its own, so pair it with a trusted LAN, a firewall, or a reverse proxy — never expose it to the public internet.
 
 Connection RPC allows loopback calls from the current Host by default. If the Web profile deliberately runs on a trusted LAN, reuse the existing Host authority in that profile's `cordis.patch.yml`:
 

@@ -35,7 +35,7 @@ function fakeDelivery({ queued = false } = {}) {
   };
 }
 
-test('the target tool lists every account with its channel and route', async () => {
+test('the target tool lists every account with its channel and kind, without the platform route', async () => {
   const [list] = createProactiveSendTools({ deliveryService: fakeDelivery() });
   assert.equal(list.name, 'dsh_im_targets');
   const result = await list.execute({}, {});
@@ -43,6 +43,9 @@ test('the target tool lists every account with its channel and route', async () 
   assert.deepEqual(result.targets.map((target) => `${target.botId}:${target.targetId}`), ['wx-1:t1', 'qq-1:t2']);
   assert.equal(result.targets[0].channel, 'weixin');
   assert.equal(result.targets[1].kind, 'group');
+  // The platform route stays on the Host so contact identifiers never reach the model.
+  assert.equal('route' in result.targets[0], false);
+  assert.equal('route' in result.targets[1], false);
 });
 
 test('the send tool reports a delivered message after the user approves', async () => {

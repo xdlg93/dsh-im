@@ -122,10 +122,15 @@ test('iLink native file items download lazily and decrypt without image size or 
   assert.equal(files[0].size, plaintext.length);
   assert.equal(calls.length, 0, 'file download stays lazy');
   assert.deepEqual(await files[0].load({}), plaintext);
-  assert.deepEqual(calls, [{
-    url: 'https://novac2c.cdn.weixin.qq.com/c2c/download?encrypted_query_param=native-file-ticket',
-    init: { method: 'GET', signal: undefined, redirect: 'manual' },
-  }]);
+  // The download now goes through the guarded image fetch: HTTPS, the WeChat CDN
+  // host only, no redirects, and a byte cap.
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url,
+    'https://novac2c.cdn.weixin.qq.com/c2c/download?encrypted_query_param=native-file-ticket');
+  assert.equal(calls[0].init.method, 'GET');
+  // The guarded fetch always runs under its own request deadline.
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[0].init.redirect, 'manual');
 });
 
 test('Weixin image keys support both documented CDN encodings and reject unsafe URLs', () => {
@@ -231,7 +236,8 @@ test('sendText emits the iLink message envelope without reflecting the token in 
   assert.equal(body.msg.item_list[0].text_item.text, 'Harness reply');
   assert.deepEqual(result.providerMessageIds, [body.msg.client_id]);
   assert.equal(body.base_info.channel_version, '2.4.6');
-  assert.equal(body.base_info.bot_agent, 'DeepSeekHarness/1.1.0');
+  // The announced client names this plugin and its real version.
+  assert.match(body.base_info.bot_agent, /^DeepSeekHarness\/dsh-im-\d+\.\d+\.\d+$/u);
   assert.doesNotMatch(calls[0].init.body, /host-only-token/);
 });
 

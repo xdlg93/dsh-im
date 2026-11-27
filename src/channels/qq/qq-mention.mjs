@@ -26,8 +26,11 @@ export function normalizeQqMentions(message, botIds = new Set()) {
   const content = typeof message.content === 'string' ? message.content : '';
   // raw.content is still the current message, never the quoted message snapshot.
   const rawContent = typeof message.raw?.content === 'string' ? message.raw.content : '';
-  const mentioned = isQqMessageAddressed(message)
-    || [...`${content}\n${rawContent}`.matchAll(marker)].some((match) => botIds.has(match[1]));
+  // Only the platform's own signals decide whether the bot was addressed. The
+  // appId is public, so matching the literal `<@!appId>` in the body would let any
+  // member "mention" the bot by typing it — the marker is used below only to strip
+  // a mention the platform already reported.
+  const mentioned = isQqMessageAddressed(message);
   // Match the SDK sanitizer's in-place contract: later sender enrichment must
   // remain visible to the existing queued message and source-context capture.
   message[addressedToBot] = mentioned;

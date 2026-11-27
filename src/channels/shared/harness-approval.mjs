@@ -66,11 +66,38 @@ export function validHarnessApproval(payload) {
     && (payload.reason === undefined || typeof payload.reason === 'string');
 }
 
+/** Keys whose value is a secret no chat message should echo back. */
+const SECRET_KEY = /^(?:.*(?:token|secret|password|passwd|api[-_]?key|credential|private[-_]?key|authorization|cookie).*)$/iu;
+/** Inline `name=value` or `name: value` pairs inside a free-form string. */
+const SECRET_PAIR = /\b([\w.-]*(?:token|secret|password|passwd|api[-_]?key|credential)[\w.-]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/giu;
+/** `Authorization: Bearer <token>` and its Basic form. */
+const AUTH_SCHEME = /\b(Bearer|Basic)\s+[\w.~+/=-]+/giu;
+const REDACTED = '[已隐藏]';
+
+/** Replace secret-looking values so an approval card cannot leak them twice. */
+function redactSecrets(value, depth = 0) {
+  if (depth > 6) return REDACTED;
+  if (Array.isArray(value)) return value.map((item) => redactSecrets(item, depth + 1));
+  if (value !== null && typeof value === 'object') {
+    const next = {};
+    for (const [key, item] of Object.entries(value)) {
+      next[key] = SECRET_KEY.test(key) ? REDACTED : redactSecrets(item, depth + 1);
+    }
+    return next;
+  }
+  if (typeof value === 'string') {
+    return value
+      .replace(SECRET_PAIR, `$1$2${REDACTED}`)
+      .replace(AUTH_SCHEME, `$1 ${REDACTED}`);
+  }
+  return value;
+}
+
 function toolArguments(toolCall) {
   const source = toolCall?.arguments;
   if (source !== null && typeof source === 'object') {
     try {
-      return JSON.stringify(source, null, 2);
+      return JSON.stringify(redactSecrets(source), null, 2);
     } catch {
       return null;
     }
@@ -80,9 +107,12 @@ function toolArguments(toolCall) {
   // Harness treats an empty tool argument string as an empty object.
   if (!raw) return source === '' ? '{}' : null;
   try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
+    return JSON.stringify(redactSecrets(JSON.parse(raw)), null, 2);
   } catch {
-    return raw;
+    // Not JSON: redact `token=...` pairs and auth schemes in the free-form text.
+    return raw
+      .replace(SECRET_PAIR, `$1$2${REDACTED}`)
+      .replace(AUTH_SCHEME, `$1 ${REDACTED}`);
   }
 }
 

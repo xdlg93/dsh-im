@@ -61,12 +61,14 @@ test('QQ runtime preserves mention decisions through sanitization, typing and co
     return ctx.message;
   }
   for (const [content, fields] of [
-    ['<@123> /status', {}],
-    ['<@!ready-self> /status', {}],
+    // Only a platform-addressed group event reaches the bot; the literal marker
+    // alone is public knowledge and must not count.
+    ['<@123> /status', { rawEventType: 'GROUP_AT_MESSAGE_CREATE' }],
+    ['<@!ready-self> /status', { rawEventType: 'GROUP_AT_MESSAGE_CREATE' }],
     ['<@ABCDEF0123456789ABCDEF0123456789> /status', {
       mentions: [{ is_you: true, member_openid: 'ABCDEF0123456789ABCDEF0123456789' }],
     }],
-    ['<@!ABCDEF0123456789ABCDEF0123456789> /status', {}],
+    ['<@!ABCDEF0123456789ABCDEF0123456789> /status', { rawEventType: 'GROUP_AT_MESSAGE_CREATE' }],
   ]) {
     const count = bot.sent.length;
     const normalized = await dispatch(content, fields);
@@ -76,7 +78,7 @@ test('QQ runtime preserves mention decisions through sanitization, typing and co
     assert.match(bot.sent.at(-1).text, /连接正常/);
   }
   const count = bot.sent.length;
-  for (const content of ['/status', '<@other> /status', '<@1234> /status']) {
+  for (const content of ['/status', '<@other> /status', '<@1234> /status', '<@123> /status']) {
     await dispatch(content);
     assert.equal(typing.at(-1), false);
     assert.equal(bot.sent.length, count);

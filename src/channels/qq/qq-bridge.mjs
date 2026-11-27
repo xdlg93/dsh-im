@@ -92,6 +92,8 @@ function interactionResolvedText() {
   return t('这个问题已在其他客户端处理，无需再次回答。');
 }
 const DEFAULT_FILE_UPLOAD_TIMEOUT_MS = 120_000;
+/** Largest inbound file this bridge will pull into memory. */
+const QQ_INBOUND_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 export const QQ_IMAGE_HOSTS = Object.freeze([
   '.myqcloud.com',
@@ -219,18 +221,22 @@ function qqReplyReference(message) {
   };
 }
 
-async function fetchQqFileBuffer(url, { fetchImpl, signal }) {
+/**
+ * Download one inbound file through the same guard the image path uses.
+ *
+ * A file URL comes from the platform payload, so it is fetched with
+ * `redirect: 'manual'`, an HTTPS-only check, the media-host allowlist and a byte
+ * cap. Following a redirect here would let a forged payload reach an internal
+ * address, and an uncapped body would let a large file exhaust memory.
+ */
+async function fetchQqFileBuffer(url, { fetchImpl, signal, maxBytes }) {
   const normalizedUrl = url.startsWith('//') ? `https:${url}` : url;
-  const response = await fetchImpl(new URL(normalizedUrl), {
-    method: 'GET',
+  return fetchImageBuffer(normalizedUrl, {
+    fetchImpl,
     signal,
-    redirect: 'follow',
+    maxBytes: maxBytes ?? QQ_INBOUND_FILE_MAX_BYTES,
+    allowedHosts: QQ_IMAGE_HOSTS,
   });
-  if (!response?.ok) {
-    await response?.body?.cancel?.().catch?.(() => undefined);
-    throw new Error(`QQ file download failed with HTTP ${response?.status ?? 'unknown'}`);
-  }
-  return Buffer.from(await response.arrayBuffer());
 }
 
 /** Convert QQ's attachment metadata into lazily downloaded image references. */
@@ -264,9 +270,9 @@ export function qqInboundMessage(message, { fetchImpl = fetch } = {}) {
       name: name ?? (files.length === 0 ? 'file' : `file-${files.length + 1}`),
       ...(mediaType?.includes('/') ? { mediaType } : {}),
       ...(Number.isFinite(declaredSize) && declaredSize >= 0 ? { size: declaredSize } : {}),
-      load: ({ signal } = {}) => {
+      load: ({ signal, maxBytes } = {}) => {
         if (!url) throw new Error('QQ file attachment has no download URL');
-        return fetchQqFileBuffer(url, { fetchImpl, signal });
+        return fetchQqFileBuffer(url, { fetchImpl, signal, maxBytes });
       },
     });
   }

@@ -164,7 +164,10 @@ test('general settings defaults to group history and keeps Attachments and Deliv
   assert.match(markup, /id="dim-general-settings-tab-delivery"[^>]*aria-selected="false"/);
   assert.equal((markup.match(/role="tab"/g) ?? []).length, 3);
   assert.match(markup, /群聊天记录保留天数/);
-  assert.match(markup, /value="14"/);
+  // The archive starts at a week and is off by default.
+  assert.match(markup, /value="7"/);
+  assert.match(markup, /记录群聊天/);
+  assert.match(markup, /同时保存群文件/);
   assert.match(markup, /正在读取群记录设置/);
 });
 

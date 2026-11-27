@@ -39,6 +39,7 @@ import {
   isPresetCommand,
   runPresetCommand,
 } from '../shared/preset-command.mjs';
+import { isPermissionCommand } from '../shared/permission-command.mjs';
 import { runWorkspaceCommand } from '../shared/workspace-command.mjs';
 import { askInWorkspaceSession } from '../shared/workspace-session.mjs';
 import {
@@ -875,6 +876,13 @@ export class WeixinHarnessBridge {
             });
           }
         }
+        await this.#state.markSeen(messageId);
+        return;
+      }
+      // /permission is a QQ-only command; answering here beats handing the text to
+      // the model, which would look like the channel supports it.
+      if (!hasImages && !hasFiles && isPermissionCommand(text)) {
+        await this.#send(sender, t('微信通道不支持切换权限档位；请在 QQ 私聊或 Web 设置里切换。'), contextToken, runId);
         await this.#state.markSeen(messageId);
         return;
       }

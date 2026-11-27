@@ -385,4 +385,6 @@ export default {
     'The file "{name}" is outside the Session workspace, so it was not sent; move it into the workspace first.',
   '结果文件「{name}」看起来是凭据或密钥文件，已拒绝发送。':
     'The file "{name}" looks like a credential or key file, so sending it was refused.',
-  };
+  '微信通道不支持切换权限档位；请在 QQ 私聊或 Web 设置里切换。':
+    'The WeChat channel cannot change permission presets; switch it in a QQ direct chat or in the Web settings.',
+};

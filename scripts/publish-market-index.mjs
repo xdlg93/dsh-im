@@ -9,8 +9,9 @@
 //
 // Without --commit the script uses HEAD.
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
@@ -36,6 +37,14 @@ try {
 
 const versions = [...(existing?.plugins?.[0]?.versions ?? [])]
   .filter((entry) => entry.version !== manifest.version);
+const tarballPath = join(root, 'docs', 'pkg', `dsh-im-${manifest.version}.tgz`);
+let tarballDigest = null;
+try {
+  tarballDigest = createHash('sha256').update(await readFile(tarballPath)).digest('hex');
+} catch {
+  // A release without a packed tarball still publishes the git channel.
+}
+
 versions.push({
   version: manifest.version,
   publishTimestamp,
@@ -45,9 +54,12 @@ versions.push({
     commit,
   },
   engines: { dsh: manifest.engines.dsh },
-  // Not part of format 1: the market drops it, and this plugin's own updater
-  // reads it as the fallback channel when git cannot reach github.com.
+  // Not part of format 1: the market drops these, and this plugin's own updater
+  // reads them as the fallback channel when git cannot reach github.com. The
+  // digest is what makes that channel verifiable: it is the only integrity check
+  // a tarball install has.
   tgz: `https://xdlg93.github.io/dsh-im/pkg/dsh-im-${manifest.version}.tgz`,
+  ...(tarballDigest === null ? {} : { tgzSha256: tarballDigest }),
 });
 // The market requires versions in descending SemVer precedence; a plain reverse
 // string sort is enough here because every entry shares the same shape.

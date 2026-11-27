@@ -65,7 +65,10 @@ test('General tab configures sidebar and retention and retains Attachments navig
   assert.equal(calls.filter((call) => call.endpoint.endsWith('.set')).length, 0);
   await act(async () => { input().props.onChange({ target: { value: '30' } }); });
   await act(async () => { await form().props.onSubmit({ preventDefault() {} }); });
-  assert.deepEqual(calls.at(-1), { endpoint: 'settings.group-history.set', payload: { groupHistoryRetentionDays: 30 } });
+  assert.deepEqual(calls.at(-1), {
+    endpoint: 'settings.group-history.set',
+    payload: { groupHistoryRetentionDays: 30, groupHistoryEnabled: false, groupHistoryAttachments: false },
+  });
   await act(async () => { renderer.root.findByProps({ id: 'dim-general-settings-tab-attachments' }).props.onClick(); });
   assert.equal(renderer.root.findByProps({ id: 'dim-globalTtlInput' }).props.value, '24');
   act(() => renderer.unmount());

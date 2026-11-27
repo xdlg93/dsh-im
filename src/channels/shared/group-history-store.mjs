@@ -7,7 +7,9 @@ import { stageInboundFiles } from './inbound-file.mjs';
 
 // QQ keeps a per-group history; the WeChat bot has no group-history API.
 export const GROUP_HISTORY_CHANNELS = Object.freeze(['qq']);
-export const DEFAULT_GROUP_HISTORY_DAYS = 14;
+// A group archive keeps everything a group says, including messages that were
+// never meant for the bot, so it starts off and keeps a week when enabled.
+export const DEFAULT_GROUP_HISTORY_DAYS = 7;
 const DAY = 86_400_000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
@@ -44,6 +46,8 @@ export class GroupHistoryStore {
   #db;
   #ready;
   #days = DEFAULT_GROUP_HISTORY_DAYS;
+  #enabled = false;
+  #storeAttachments = false;
   #settingsError = null;
   #maintenance = Promise.resolve();
   #now;
@@ -79,6 +83,8 @@ export class GroupHistoryStore {
       const days = normalizeGroupHistoryDays(data.groupHistoryRetentionDays);
       if (data.version !== 1 || days === null) throw invalid('群记录设置损坏，请重新保存保留天数。');
       this.#days = days;
+      this.#enabled = data.groupHistoryEnabled === true;
+      this.#storeAttachments = data.groupHistoryAttachments === true;
     } catch (error) {
       if (error.code !== 'ENOENT') this.#settingsError = '群记录设置无法读取，已暂停自动清理，请重新保存保留天数。';
     }
@@ -133,7 +139,12 @@ export class GroupHistoryStore {
 
   async settings() {
     await this.ready();
-    return { groupHistoryRetentionDays: this.#days, ...(this.#settingsError ? { error: this.#settingsError } : {}) };
+    return {
+      groupHistoryRetentionDays: this.#days,
+      groupHistoryEnabled: this.#enabled,
+      groupHistoryAttachments: this.#storeAttachments,
+      ...(this.#settingsError ? { error: this.#settingsError } : {}),
+    };
   }
 
   setRetentionDays(value) {
@@ -144,7 +155,12 @@ export class GroupHistoryStore {
       const path = join(this.#root, 'general-settings.json');
       const temporary = `${path}.${randomUUID()}.tmp`;
       try {
-        await writeFile(temporary, `${JSON.stringify({ version: 1, groupHistoryRetentionDays: days }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+        await writeFile(temporary, `${JSON.stringify({
+          version: 1,
+          groupHistoryRetentionDays: days,
+          groupHistoryEnabled: this.#enabled,
+          groupHistoryAttachments: this.#storeAttachments,
+        }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
         await rename(temporary, path);
       } finally { await rm(temporary, { force: true }); }
       this.#days = days;
@@ -156,9 +172,44 @@ export class GroupHistoryStore {
     return write;
   }
 
+  /**
+   * Turn recording (and attachment copies) on or off.
+   *
+   * Both default to off: the archive is opt-in, and attachments are opt-in again
+   * so metadata alone does not pull a whole group's files onto the disk.
+   */
+  setEnabled({ enabled, attachments } = {}) {
+    const nextEnabled = enabled === true;
+    const nextAttachments = attachments === true;
+    const write = this.#maintenance.catch(() => {}).then(async () => {
+      await this.ready();
+      const path = join(this.#root, 'general-settings.json');
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, `${JSON.stringify({
+          version: 1,
+          groupHistoryRetentionDays: this.#days,
+          groupHistoryEnabled: nextEnabled,
+          groupHistoryAttachments: nextAttachments,
+        }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+        await rename(temporary, path);
+      } finally { await rm(temporary, { force: true }); }
+      this.#enabled = nextEnabled;
+      this.#storeAttachments = nextAttachments;
+      this.#settingsError = null;
+      void this.sweep().catch((error) => this.#warn(error));
+      return this.settings();
+    });
+    this.#maintenance = write;
+    return write;
+  }
+
   async capture(entry) {
     await this.ready();
     if (this.#closing || !entry || !GROUP_HISTORY_CHANNELS.includes(entry.channel)) return null;
+    // Recording is opt-in: a group archive keeps messages the bot was never
+    // addressed in, so nothing is created or written until it is turned on.
+    if (!this.#enabled) return null;
     const platformGroupId = text(entry.groupId);
     if (!platformGroupId) return null;
     const scope = text(entry.scope);
@@ -174,8 +225,6 @@ export class GroupHistoryStore {
         .run(text(entry.groupName) || group.name, text(entry.capability, 1000) || group.capability, group.id);
     }
     const context = Object.freeze({ store: this, groupId: group.id });
-    // Older databases may retain an enabled column. It no longer gates
-    // recording: every group delivered by the platform is recorded by default.
     if (this.#settingsError) return context;
     const messageId = text(entry.messageId, 2048);
     if (!messageId || !entry.senderId) return context;
@@ -191,7 +240,9 @@ export class GroupHistoryStore {
           text(entry.type) || 'text', typeof entry.text === 'string' ? entry.text : '', text(entry.threadId) || null, text(entry.replyToMessageId, 2048) || null);
       const message = this.#db.prepare('SELECT id FROM messages WHERE group_id = ? AND platform_message_id = ?').get(group.id, messageId);
       // Repeated delivery may carry metadata missing from the first event.
-      for (const [index, source] of (entry.attachments ?? []).entries()) {
+      // Attachments are only copied when the operator opted in; the message row
+      // itself is still recorded, so the text stays searchable.
+      for (const [index, source] of (this.#storeAttachments ? entry.attachments ?? [] : []).entries()) {
         const key = text(source.key) || String(index);
         const size = Number.isSafeInteger(source.size) && source.size >= 0 ? source.size : null;
         this.#db.prepare(`INSERT INTO attachments(id,message_id,source_attachment_key,name,mime_type,size_bytes,status)

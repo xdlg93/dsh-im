@@ -12,7 +12,22 @@ export function createGroupHistoryRpcHandler(store) {
       let value;
       if (endpoint === GROUP_HISTORY_ENDPOINTS.get && keys === '') value = await store.settings();
       else if (endpoint === GROUP_HISTORY_ENDPOINTS.set && keys === 'groupHistoryRetentionDays') value = await store.setRetentionDays(payload.groupHistoryRetentionDays);
-      else throw new Error('群记录设置请求无效。');
+      // The archive is opt-in, and copying attachments is a second opt-in: both
+      // switches travel together so one save cannot leave a half-enabled archive.
+      else if (endpoint === GROUP_HISTORY_ENDPOINTS.set
+        && keys === 'groupHistoryAttachments,groupHistoryEnabled,groupHistoryRetentionDays') {
+        // The panel saves the retention and both switches together.
+        await store.setRetentionDays(payload.groupHistoryRetentionDays);
+        value = await store.setEnabled({
+          enabled: payload.groupHistoryEnabled,
+          attachments: payload.groupHistoryAttachments,
+        });
+      } else if (endpoint === GROUP_HISTORY_ENDPOINTS.set && keys === 'groupHistoryAttachments,groupHistoryEnabled') {
+        value = await store.setEnabled({
+          enabled: payload.groupHistoryEnabled,
+          attachments: payload.groupHistoryAttachments,
+        });
+      } else throw new Error('群记录设置请求无效。');
       return { ok: true, value };
     } catch (error) {
       return { ok: false, error: { code: error.code ?? 'group-history-unavailable',

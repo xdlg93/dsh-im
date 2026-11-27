@@ -11,7 +11,9 @@ function result(value) {
 }
 
 export function GroupHistorySettings({ rpcCall }) {
-  const [days, setDays] = React.useState('14');
+  const [days, setDays] = React.useState('7');
+  const [enabled, setEnabled] = React.useState(false);
+  const [attachments, setAttachments] = React.useState(false);
   const [phase, setPhase] = React.useState('loading');
   const [error, setError] = React.useState(null);
   const [notice, setNotice] = React.useState(null);
@@ -25,6 +27,8 @@ export function GroupHistorySettings({ rpcCall }) {
       if (signal?.aborted || !mounted.current) return;
       if (!Number.isSafeInteger(settings?.groupHistoryRetentionDays)) throw new Error('群记录设置返回了无法识别的响应。');
       setDays(String(settings.groupHistoryRetentionDays));
+      setEnabled(settings.groupHistoryEnabled === true);
+      setAttachments(settings.groupHistoryAttachments === true);
       setError(settings.error ?? null); setPhase('ready');
     } catch (caught) {
       if (signal?.aborted || !mounted.current) return;
@@ -47,13 +51,40 @@ export function GroupHistorySettings({ rpcCall }) {
     }
     busy.current = true; setPhase('saving'); setError(null); setNotice(null);
     try {
-      const settings = result(await rpcCall(GROUP_HISTORY_SETTINGS_ENDPOINTS.set, { groupHistoryRetentionDays: value }));
-      if (mounted.current) { setDays(String(settings.groupHistoryRetentionDays)); setNotice('已保存'); }
+      const settings = result(await rpcCall(GROUP_HISTORY_SETTINGS_ENDPOINTS.set, {
+        groupHistoryRetentionDays: value,
+        groupHistoryEnabled: enabled,
+        groupHistoryAttachments: enabled && attachments,
+      }));
+      if (mounted.current) {
+        setDays(String(settings.groupHistoryRetentionDays));
+        setEnabled(settings.groupHistoryEnabled === true);
+        setAttachments(settings.groupHistoryAttachments === true);
+        setNotice('已保存');
+      }
     } catch (caught) { if (mounted.current) setError(caught.message); }
     finally { busy.current = false; if (mounted.current) setPhase('ready'); }
   };
   return h('section', { className: 'dim-botGeneralSettings dim-groupHistorySettings', 'aria-label': '群聊天记录', 'aria-busy': phase === 'loading' || phase === 'saving' },
     h('form', { onSubmit: save },
+      h('div', { className: 'dim-botGeneralRow' },
+        h('div', { className: 'dim-botGeneralText' },
+          h('label', { className: 'dim-botGeneralTitle', htmlFor: `${id}-enabled` }, '记录群聊天'),
+          h('p', { className: 'dim-botGeneralHelp', id: `${id}-enabled-help` },
+            '默认关闭。打开后，机器人在的群里即使没有 @ 它，消息也会存到本机，供之后检索；不需要就别开。')),
+        h('div', { className: 'dim-botGeneralControl dim-groupHistoryControl' },
+          h('input', { id: `${id}-enabled`, type: 'checkbox', checked: enabled, disabled: phase !== 'ready',
+            'aria-describedby': `${id}-enabled-help`,
+            onChange: (event) => { setEnabled(event.target.checked); setNotice(null); } }))),
+      h('div', { className: 'dim-botGeneralRow' },
+        h('div', { className: 'dim-botGeneralText' },
+          h('label', { className: 'dim-botGeneralTitle', htmlFor: `${id}-attachments` }, '同时保存群文件'),
+          h('p', { className: 'dim-botGeneralHelp', id: `${id}-attachments-help` },
+            '关闭时只记录文字与附件信息，不下载文件本体。需要下载才打开。')),
+        h('div', { className: 'dim-botGeneralControl dim-groupHistoryControl' },
+          h('input', { id: `${id}-attachments`, type: 'checkbox', checked: attachments,
+            disabled: phase !== 'ready' || !enabled, 'aria-describedby': `${id}-attachments-help`,
+            onChange: (event) => { setAttachments(event.target.checked); setNotice(null); } }))),
       h('div', { className: 'dim-botGeneralRow' },
         h('div', { className: 'dim-botGeneralText' },
           h('label', { className: 'dim-botGeneralTitle', htmlFor: `${id}-days` }, '群聊天记录保留天数'),

@@ -23,20 +23,27 @@ test('QQ recognizes only explicit self mentions and removes only their markers',
   }
 });
 
-test('QQ content fallback uses exact appId or verified self identity, including before sanitization', () => {
+test('QQ only trusts the platform mention fields, never a literal marker', () => {
   const ids = new Set(['123']);
+  // The appId is public, so typing the marker must not address the bot.
   for (const content of ['<@123> /status', '<@!123> /status']) {
     const normalized = normalizeQqMentions(group(content), ids);
-    assert.equal(isQqMessageAddressed(normalized), true);
+    assert.equal(isQqMessageAddressed(normalized), false, content);
+    // The known marker is still cleaned out of the body; only the decision matters.
     assert.equal(normalized.content, '/status');
   }
-  const sanitized = normalizeQqMentions(group('/status', { raw: { content: '<@123> /status' } }), ids);
-  assert.equal(isQqMessageAddressed(sanitized), true);
+  // The platform's own signals still work, and the marker is stripped from the body.
+  const event = normalizeQqMentions(group('<@123> /status', { rawEventType: 'GROUP_AT_MESSAGE_CREATE' }), ids);
+  assert.equal(isQqMessageAddressed(event), true);
+  assert.equal(event.content, '/status');
+  const field = normalizeQqMentions(group('<@123> /status', { mentions: [{ is_you: true }] }), ids);
+  assert.equal(isQqMessageAddressed(field), true);
+  assert.equal(field.content, '/status');
+  // A verified self mention teaches the runtime its own identity for stripping.
   normalizeQqMentions(group(`<@${openid}> first`, { mentions: [{ is_you: true, member_openid: openid }] }), ids);
-  const learned = normalizeQqMentions(group(`<@!${openid}> 2`), ids);
+  const learned = normalizeQqMentions(group(`<@!${openid}> 2`, { rawEventType: 'GROUP_AT_MESSAGE_CREATE' }), ids);
   assert.equal(isQqMessageAddressed(learned), true);
   assert.equal(learned.content, '2');
-  assert.equal(isQqMessageAddressed(normalizeQqMentions(group(`<@${openid}> 2`), new Set(['456']))), false);
 });
 
 test('QQ leaves unmentioned messages, other mentions and quoted mentions silent', () => {
