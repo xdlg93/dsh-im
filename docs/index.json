@@ -64,7 +64,7 @@
             "dsh": "^0.2.2-rc.5"
           },
           "tgz": "https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.6.tgz",
-          "tgzSha256": "925c21c743f8228a89a2b3a7b80b0fe9b3737af205792f7a5ec373d45eb4130e"
+          "tgzSha256": "c37201c1459d4c232e0583024906ee2b0232a837a55913b9057463295a66972d"
         },
         {
           "version": "1.3.5",
@@ -104,8 +104,7 @@
           },
           "engines": {
             "dsh": "^0.2.2-rc.5"
-          },
-          "tgz": "https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.3.tgz"
+          }
         },
         {
           "version": "1.3.2",
@@ -117,8 +116,7 @@
           },
           "engines": {
             "dsh": "^0.2.2-rc.5"
-          },
-          "tgz": "https://xdlg93.github.io/dsh-im/pkg/dsh-im-1.3.2.tgz"
+          }
         },
         {
           "version": "1.3.1",

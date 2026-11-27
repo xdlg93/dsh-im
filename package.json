@@ -94,7 +94,8 @@
     "test": "node --test test/*.test.mjs test/channels/*/*.test.mjs",
     "check": "npm run build && npm test && node scripts/verify-package.mjs",
     "publish:index": "node scripts/publish-market-index.mjs",
-    "pack:release": "node scripts/pack-release.mjs"
+    "pack:release": "node scripts/pack-release.mjs",
+    "verify:index": "node scripts/verify-index-digests.mjs"
   },
   "engines": {
     "node": ">=22.19",

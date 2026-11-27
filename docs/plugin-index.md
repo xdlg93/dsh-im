@@ -27,7 +27,8 @@ dsh plugin --profile web add https://xdlg93.github.io/dsh-im/pkg/dsh-im-<版本>
 # 1. 版本号与 CHANGELOG（package.json 的 version 决定 tgz 文件名）
 # 2. 写 Release 正文（可选，但推荐）：docs/releases/<tag>.md
 npm run build && npm run check
-npm run pack:release              # 3. 生成 docs/pkg/dsh-im-<版本>.tgz
+npm run pack:release              # 3. 生成 docs/pkg/dsh-im-<版本>.tgz（保留旧版本包）
+npm run verify:index              #    校验索引里的 tgz 与 sha256 是否和 docs/pkg 一致
 git add -A && git commit -m "feat: ..."   # 4. 提交代码与安装包
 git tag -a v1.3.x -F <notes>      # 5. 打 tag
 git push origin main v1.3.x       # 6. 推送：Release 工作流自动建 Release，Pages 自动重建

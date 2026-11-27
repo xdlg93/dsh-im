@@ -16,7 +16,13 @@ await mkdir(target, { recursive: true });
 // a missing file would turn those links into 404s. Each one is ~1.6 MB.
 
 execFileSync('pnpm', ['pack', '--pack-destination', target], { cwd: root, stdio: 'inherit' });
-const packed = (await readdir(target)).find((name) => name.endsWith('.tgz'));
+// `pnpm pack` names its output after the package; look for exactly that file
+// instead of "any tarball in the directory", which would pick an older release
+// and rename it over the new one.
+const produced = `xdlg93-dsh-im-${manifest.version}.tgz`;
+const packed = (await readdir(target)).includes(produced)
+  ? produced
+  : (await readdir(target)).find((name) => name.endsWith('.tgz'));
 if (!packed) throw new Error('pnpm pack produced no tarball');
 const wanted = `dsh-im-${manifest.version}.tgz`;
 if (packed !== wanted) await rename(join(target, packed), join(target, wanted));
