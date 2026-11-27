@@ -1,6 +1,6 @@
 {
   "name": "@xdlg93/dsh-im",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "icon": "./assets/logo-plugin-message-link-gradient.webp",
   "description": "把微信、QQ扫码接入DeepSeek Harness。 Connect WeChat and QQ to DSH via QR-code login.",
   "keywords": [

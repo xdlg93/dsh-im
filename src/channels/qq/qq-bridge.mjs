@@ -76,6 +76,7 @@ import {
 } from '../shared/message-failure.mjs';
 import {
   COMMAND_PERMISSION_DENIED_MESSAGE,
+  GUEST_CHAT_DENIED_MESSAGE,
   evaluateInboundAccess,
 } from '../shared/inbound-access.mjs';
 import { ApiError } from '@tencent-connect/qqbot-nodejs';
@@ -1156,10 +1157,12 @@ export class QqHarnessBridge {
     task = Promise.resolve().then(async () => {
       if (this.#state.hasSeen(messageId)) return;
       await this.#state.markSeen(messageId);
-      if (access.reason === 'command-not-allowed') {
+      if (access.reason === 'command-not-allowed' || access.reason === 'guest-chat-disabled') {
         this.#status.messagesReceived += 1;
         this.#status.lastMessageAt = new Date().toISOString();
-        await this.#bot.sendText(message.replyTarget, t(COMMAND_PERMISSION_DENIED_MESSAGE));
+        await this.#bot.sendText(message.replyTarget, t(access.reason === 'guest-chat-disabled'
+          ? GUEST_CHAT_DENIED_MESSAGE
+          : COMMAND_PERMISSION_DENIED_MESSAGE));
         this.#status.messagesReplied += 1;
         this.#status.lastReplyAt = new Date().toISOString();
       } else {

@@ -192,7 +192,7 @@ Both channels share one feature set. Everything is configured in the matching ta
 
 QQ saves the group messages and attachments it actually receives, including non-mentioned messages the platform allows. Saving never triggers a model reply; mention the bot in the group to query the history, summarize a discussion, or read a file.
 
-History is shared per group and independent of bots and workspaces. It rolls off after 14 days by default; change it under **General settings → General → Group history retention**. Only received content is stored — the plugin never backfills full history. See [Group message history and shared files](docs/group-history.en.md).
+History is shared per group and independent of bots and workspaces. It rolls off after 7 days by default; change it under **General settings → General → Group history retention**. Only received content is stored — the plugin never backfills full history. See [Group message history and shared files](docs/group-history.en.md).
 
 ### Context enhancement
 
@@ -227,9 +227,11 @@ These are deliberately restricted so one chat message cannot take over the Host:
 - `/sessionlist --all`, `/sessionlist <other workspace>`, `/session <ID>` and
   `/sessionarchive`: cross-workspace listing, adopting a Session and archiving or
   stopping one are **owner only**, so a group cannot reach someone else's work.
-- "Allowed to chat" is not "allowed to run tools": a tool call started by a
-  non-owner needs the **owner's** approval; the requester approving their own
-  action no longer counts.
+- "Allowed to chat" is not "allowed to run tools": a plain message can drive
+  `read` or `web_fetch`, which need no approval, so guest chat is **off by
+  default**; only the owner chats unless the access settings enable it
+  (`allowGuestChat`). For tools that do need approval, a non-owner's request is
+  settled by the **owner**.
 - `dsh_im_return_file`: only files **inside the Session workspace** are sent;
   `~/.ssh`, `~/.dsh`, `id_rsa`, `.env`, `*.pem` and similar are refused.
 - `dsh_im_send`: every send asks the Host for approval (`allowed-once` only) and

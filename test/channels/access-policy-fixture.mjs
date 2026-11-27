@@ -28,6 +28,9 @@ export function directAccessPolicy({
   };
   return {
     getSettings: () => settings,
+    // These fixtures exercise messaging behaviour, so they model a bot whose
+    // operator enabled guest chat; the deny path is covered by its own tests.
+    allowsGuestChat: () => true,
     isPrivileged: (senderIds) => (
       (Array.isArray(senderIds) ? senderIds : [senderIds])
         .some((senderId) => privileged.has(senderId))
@@ -39,5 +42,7 @@ export function directAccessPolicy({
 // of assuming that production supplies the fixture's privileged sender set.
 export function configuredAccessPolicy({ channel, config, users = [] }) {
   const settings = { direct: scope(users), group: scope() };
-  return accessPolicyProvider({ accessPolicyFor: () => settings }, 'configured_bot', { channel, config });
+  return accessPolicyProvider({ accessPolicyFor: () => settings }, 'configured_bot', {
+    channel, config: { ...config, allowGuestChat: true },
+  });
 }

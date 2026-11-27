@@ -69,7 +69,11 @@ function fixture(channel, { mode = 'queue', canCommand = true } = {}) {
     return { messageId: 'reply', message_id: 'reply', id: 'reply' };
   };
   const scope = { mode: 'open', open: { defaultCanExecuteCommands: canCommand, commandPermissionOverrides: [] }, allowlist: { users: [] } };
-  const accessPolicy = { getSettings: () => ({ direct: scope, group: scope }) };
+  // Messaging behaviour only: model a bot whose operator enabled guest chat.
+  const accessPolicy = {
+    getSettings: () => ({ direct: scope, group: scope }),
+    allowsGuestChat: () => true,
+  };
   const contextEnhancement = { botId: 'test-bot', getSettings: () => ({
     direct: { enabled: true, fields: ['channel', 'senderId'], guidance: '' },
     group: { enabled: true, fields: ['channel', 'senderId'], guidance: '' },

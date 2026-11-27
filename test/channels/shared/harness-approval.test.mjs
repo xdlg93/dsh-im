@@ -1427,9 +1427,40 @@ test('a non-owner cannot approve the action they started themselves', async () =
   assert.ok(self);
   await self.process(async () => true);
   assert.match(notices.at(-1), /只有机器人所有者/);
-  // The request stays pending for the owner: no decision was submitted.
   assert.deepEqual(decisions, []);
-  assert.equal(queue.hasPending('group:1'), true);
+
+  // The owner may settle a request someone else started.
+  const owner = queue.claimReply({
+    key: 'group:1', actor: 'OWNER', text: '批准', addressed: true,
+    isQuestionPending: () => false, send: async () => {}, isOwner,
+  });
+  assert.ok(owner);
+  await owner.process(async () => true);
+  assert.equal(decisions.length, 1);
+  // `respond` receives the submit result; the outcome may be nested.
+  assert.equal(decisions[0]?.outcome ?? decisions[0]?.value?.outcome ?? decisions[0], 'allowed-once');
+});
+
+test('a third party cannot settle someone else’s approval', async () => {
+  const queue = new HarnessApprovalQueue();
+  const decisions = [];
+  await queue.handleRequested(interaction({
+    id: 'third',
+    toolName: 'bash',
+    respond: async (result) => { decisions.push(result); },
+  }), { key: 'group:2', actor: 'STRANGER', send: async () => {} });
+
+  const notices = [];
+  const other = queue.claimReply({
+    key: 'group:2', actor: 'BYSTANDER', text: '批准', addressed: true,
+    isQuestionPending: () => false, send: async (text) => { notices.push(text); },
+    isOwner: (who) => who === 'OWNER',
+  });
+  assert.ok(other);
+  await other.process(async () => true);
+  assert.match(notices.at(-1), /只有机器人所有者/);
+  assert.deepEqual(decisions, []);
+  assert.equal(queue.hasPending('group:2'), true);
 });
 
 test('a token budget is not treated as a credential', () => {

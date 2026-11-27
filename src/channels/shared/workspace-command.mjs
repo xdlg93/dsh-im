@@ -1026,6 +1026,11 @@ async function runConversationWorkspaceCommand(command, harness, conversationKey
       return commandResult(t('暂时无法读取当前对话工作区，请稍后重试。'));
     }
   }
+  // Clearing is a state change too: a non-owner could otherwise drop the
+  // conversation's own workspace and fall back to the bot default.
+  if (access.isOwner !== true) {
+    return commandResult(t('只有机器人所有者才能切换工作区。'));
+  }
   if (/^(?:--default|clear)$/iu.test(argument)) {
     try {
       const current = await harness.clearConversationWorkspace(conversationKey);
@@ -1041,12 +1046,8 @@ async function runConversationWorkspaceCommand(command, harness, conversationKey
   if (typeof harness?.switchConversationWorkspace !== 'function') {
     return commandResult(t('当前机器人暂不支持设置对话工作区。'));
   }
-  // A per-conversation workspace moves the sandbox root exactly like /workspace,
-  // so it answers to the same owner and registered-root policy. Without this a
-  // non-owner could point the next Session at $HOME.
-  if (access.isOwner !== true) {
-    return commandResult(t('只有机器人所有者才能切换工作区。'));
-  }
+  // The owner check above covers both clearing and switching: a per-conversation
+  // workspace moves the sandbox root exactly like /workspace.
   try {
     let selected = argument;
     if (/^\d+$/u.test(argument)) {

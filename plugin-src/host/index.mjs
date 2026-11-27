@@ -181,9 +181,10 @@ export function createImHostPlugin(internals = {}) {
       }
     };
     if (typeof ctx?.inject === 'function') {
-      // `approval` is optional: a profile without it still gets the artifact and
-      // group-history tools, and only the proactive-send gate is unavailable.
-      ctx.inject(['tools', 'systemPrompt', 'approval'], (artifactCtx) => {
+      // `approval` is read inside the callback: putting it in this inject list
+      // would stop the artifact and group-history tools from registering on a
+      // profile that ships without the approval service.
+      ctx.inject(['tools', 'systemPrompt'], (artifactCtx) => {
         installOutboundArtifactTool(artifactCtx);
         installGroupHistoryTools(artifactCtx);
         // Proactive push needs the delivery service built above, so it is

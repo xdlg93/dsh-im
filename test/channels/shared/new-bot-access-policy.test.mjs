@@ -77,10 +77,18 @@ for (const channel of ['qq']) {
     const damaged = await connect(bots[2]);
     assert.equal(damaged.getSettings(), null);
     assert.equal(checkAccess(damaged, 'direct', 'other', 'hello').reason, 'policy-unavailable');
+    // A saved "open but no commands" policy no longer means "anyone may chat":
+    // guest chat is a separate opt-in, because a chat turn can drive tools.
     const existingChatOnly = await connect(bots[3]);
     for (const conversationType of ['direct', 'group']) {
-      assert.equal(checkAccess(existingChatOnly, conversationType, 'other', 'hello').allowed, true);
+      assert.equal(checkAccess(existingChatOnly, conversationType, 'other', 'hello').reason,
+        'guest-chat-disabled');
       assert.equal(checkAccess(existingChatOnly, conversationType, 'other', '/status').reason, 'command-not-allowed');
+    }
+    const guestBot = { ...bots[3], allowGuestChat: true };
+    const guestEnabled = await connect(guestBot);
+    for (const conversationType of ['direct', 'group']) {
+      assert.equal(checkAccess(guestEnabled, conversationType, 'other', 'hello').allowed, true);
     }
 
     // A bot connected today starts closed: only the scanning account reaches it,

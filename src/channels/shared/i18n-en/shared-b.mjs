@@ -395,4 +395,6 @@ export default {
     "Listing another workspace's Sessions is owner-only; without an argument only this workspace is listed.",
   '只有机器人所有者可以批准由他人发起的操作。':
     'Only the bot owner can approve an action someone else started.',
+  '机器人默认只允许所有者对话：普通消息会驱动 Agent 调用读取类工具，无法按发送者隔离。请让所有者在「访问设置」里为该场景开启访客对话，或改用命令。':
+    'Only the owner can chat by default: a plain message drives the Agent into tools such as read, which cannot be sandboxed per sender. Ask the owner to enable guest chat for this scene in the access settings, or use commands instead.',
 };

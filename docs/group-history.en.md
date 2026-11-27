@@ -38,7 +38,7 @@ If QQ does not deliver ordinary group messages to this application, dsh-im canno
 
 Where: **DSH Settings → IM bots → gear "General settings" (top right) → General → Group history retention days**. This is a plugin-wide setting, not the "General" page inside a bot card.
 
-- 14 days by default; any other positive integer works and applies to every group without a restart.
+- 7 days by default; any other positive integer works and applies to every group without a restart.
 - Retention rolls over `N × 24` hours by message send time, not by message count or calendar day. `0` is not accepted as "keep forever" or "stop collecting".
 - Queries exclude expired records immediately. Cleanup runs at startup, hourly, and after the retention value changes; shortening retention deletes expired messages and files, and lengthening it cannot restore deleted content.
 - Attachment retention on the **Attachments** tab governs session attachment copies, not original group files.

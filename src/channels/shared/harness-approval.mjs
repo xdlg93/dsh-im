@@ -234,9 +234,11 @@ export class HarnessApprovalQueue {
     questionCompletion,
     isQuestionPending,
     send,
-    // Whether the deciding sender is the account that scanned the bot. Defaults to
-    // true so an in-process caller that already holds the Host keeps working.
-    isOwner = () => true,
+    // Optional owner policy. When a channel supplies it, an approval is settled by
+    // the owner (or by the requester, if that requester is the owner). Without it
+    // the historical requester-only rule applies, so an in-process caller that
+    // already holds the Host keeps working.
+    isOwner = null,
   }) {
     const route = this.#routes.get(key);
     const pending = route?.items[0];
@@ -265,75 +267,87 @@ export class HarnessApprovalQueue {
       if (!decision) return null;
       return notice(t(APPROVAL_RESOLVED_TEXT), true);
     }
-    if (pending.actor !== actor || (pending.requiresMention && addressed !== true)) {
-      // A requester who is not the owner must not be able to approve their own
-      // action: that would make the approval a formality for anyone who can chat.
-      if (decision && !ownerDecides(pending, actor, isOwner)) {
-        return notice(t('只有机器人所有者可以批准由他人发起的操作。'));
-      }
+    const decisionEntry = () => ({
+        process: async (before) => {
+          const presentedWhenClaimed = pending.presented;
+          const previous = pending.replyTail ?? Promise.resolve();
+          const task = previous
+            .catch(() => undefined)
+            .then(async () => {
+              if (typeof before === 'function' && await before() === false) return;
+              if (deferredByQuestion) {
+                await questionCompletion.catch(() => undefined);
+                if (pending.inactive || pending.resolving) return;
+                if (typeof isQuestionPending === 'function' && isQuestionPending()) {
+                  await send(t(APPROVAL_AFTER_QUESTION_PROMPT));
+                  return;
+                }
+              }
+              await pending.activationTask?.catch(() => undefined);
+              await pending.presentationTask?.catch(() => undefined);
+              if (!pending.inactive && pending.expiring) {
+                await send(t(APPROVAL_TIMEOUT_UNCONFIRMED_TEXT));
+                return;
+              }
+              if (pending.inactive || pending.resolving) {
+                await send(t(APPROVAL_RESOLVED_TEXT));
+                return;
+              }
+              pending.send = send;
+              // Never turn a decision sent before the operation was visibly
+              // presented into an approval. This also covers a failed presentation
+              // and the small FIFO promotion window before the next item is shown.
+              if (!presentedWhenClaimed || !pending.presented) {
+                if (!pending.presented) await this.#present(pending);
+                if (pending.inactive || pending.resolving) return;
+                await send(t(APPROVAL_PROMPT));
+                return;
+              }
+              if (pending.submitting) {
+                await send(t('审批决定正在提交，请稍候。'));
+                return;
+              }
+              if (!decision) {
+                // A button card already tells the user how to decide; repeating
+                // the type-the-decision prompt would contradict its buttons.
+                if (!pending.interactiveCard) await send(t(APPROVAL_PROMPT));
+                return;
+              }
+              await this.#submit(pending, decision);
+            });
+          pending.replyTail = task;
+          try {
+            await task;
+          } finally {
+            if (pending.replyTail === task) pending.replyTail = null;
+          }
+        },
+    });
+
+    const ownerRule = typeof isOwner === 'function' ? isOwner : null;
+    // The group mention gate is absolute: an unaddressed decision never settles
+    // an approval, not even for the owner.
+    if (pending.requiresMention && addressed !== true) {
+      return decision ? notice(t('只有发起当前任务的用户可以处理这条审批。')) : null;
+    }
+    if (pending.actor !== actor) {
       if (!decision) return null;
+      // Someone other than the requester: the owner may settle it, anyone else
+      // keeps the historical "only the requester" notice.
+      if (ownerRule) {
+        return ownerRule(actor) === true
+          ? decisionEntry()
+          : notice(t('只有机器人所有者可以批准由他人发起的操作。'));
+      }
       return notice(t('只有发起当前任务的用户可以处理这条审批。'));
     }
-    if (decision && !ownerDecides(pending, actor, isOwner)) {
+    if (decision && ownerRule && ownerRule(actor) !== true) {
+      // The requester approving their own request is only acceptable for the owner.
       return notice(t('只有机器人所有者可以批准由他人发起的操作。'));
     }
 
-    return {
-      process: async (before) => {
-        const presentedWhenClaimed = pending.presented;
-        const previous = pending.replyTail ?? Promise.resolve();
-        const task = previous
-          .catch(() => undefined)
-          .then(async () => {
-            if (typeof before === 'function' && await before() === false) return;
-            if (deferredByQuestion) {
-              await questionCompletion.catch(() => undefined);
-              if (pending.inactive || pending.resolving) return;
-              if (typeof isQuestionPending === 'function' && isQuestionPending()) {
-                await send(t(APPROVAL_AFTER_QUESTION_PROMPT));
-                return;
-              }
-            }
-            await pending.activationTask?.catch(() => undefined);
-            await pending.presentationTask?.catch(() => undefined);
-            if (!pending.inactive && pending.expiring) {
-              await send(t(APPROVAL_TIMEOUT_UNCONFIRMED_TEXT));
-              return;
-            }
-            if (pending.inactive || pending.resolving) {
-              await send(t(APPROVAL_RESOLVED_TEXT));
-              return;
-            }
-            pending.send = send;
-            // Never turn a decision sent before the operation was visibly
-            // presented into an approval. This also covers a failed presentation
-            // and the small FIFO promotion window before the next item is shown.
-            if (!presentedWhenClaimed || !pending.presented) {
-              if (!pending.presented) await this.#present(pending);
-              if (pending.inactive || pending.resolving) return;
-              await send(t(APPROVAL_PROMPT));
-              return;
-            }
-            if (pending.submitting) {
-              await send(t('审批决定正在提交，请稍候。'));
-              return;
-            }
-            if (!decision) {
-              // A button card already tells the user how to decide; repeating
-              // the type-the-decision prompt would contradict its buttons.
-              if (!pending.interactiveCard) await send(t(APPROVAL_PROMPT));
-              return;
-            }
-            await this.#submit(pending, decision);
-          });
-        pending.replyTail = task;
-        try {
-          await task;
-        } finally {
-          if (pending.replyTail === task) pending.replyTail = null;
-        }
-      },
-    };
+    return decisionEntry();
+
   }
 
   /** Present a bound private-chat approval without creating an IM prompt. */
@@ -490,11 +504,18 @@ export class HarnessApprovalQueue {
    * a boolean: an interactive card has to tell a retryable submission failure
    * apart from an in-flight decision, one that landed, or an invalid card.
    */
-  async submitByApprovalId(approvalId, outcome, { actor, detailed = false } = {}) {
+  async submitByApprovalId(approvalId, outcome, { actor, detailed = false, isOwner = null } = {}) {
     const pending = this.#byId.get(cleanText(approvalId));
     const gone = detailed ? APPROVAL_SUBMIT_RESULT.GONE : false;
     if (!pending || pending.inactive || pending.resolving) return gone;
-    if (actor !== undefined && pending.actor !== actor) return gone;
+    // Same rule as a typed reply: the requester settles their own request only
+    // when they are the owner; otherwise only the owner may settle it.
+    const ownerRule = typeof isOwner === 'function' ? isOwner : null;
+    if (ownerRule) {
+      if (actor === undefined || ownerRule(actor) !== true) return gone;
+    } else if (actor !== undefined && pending.actor !== actor) {
+      return gone;
+    }
     if (pending.submitting) return detailed ? APPROVAL_SUBMIT_RESULT.BUSY : false;
     const result = await this.#submit(pending, outcome);
     if (!detailed) return true;

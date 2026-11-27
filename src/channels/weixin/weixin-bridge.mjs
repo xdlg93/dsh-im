@@ -707,10 +707,12 @@ export class WeixinHarnessBridge {
     task = Promise.resolve().then(async () => {
       if (this.#state.hasSeen(messageId)) return;
       await this.#state.markSeen(messageId);
-      if (access.reason === 'command-not-allowed') {
+      if (access.reason === 'command-not-allowed' || access.reason === 'guest-chat-disabled') {
         this.#status.messagesReceived += 1;
         this.#status.lastMessageAt = new Date().toISOString();
-        await this.#send(sender, t(COMMAND_PERMISSION_DENIED_MESSAGE), contextToken, runId);
+        await this.#send(sender, t(access.reason === 'guest-chat-disabled'
+          ? GUEST_CHAT_DENIED_MESSAGE
+          : COMMAND_PERMISSION_DENIED_MESSAGE), contextToken, runId);
         this.#status.messagesReplied += 1;
         this.#status.lastReplyAt = new Date().toISOString();
       } else {

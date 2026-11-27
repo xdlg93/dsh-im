@@ -84,6 +84,9 @@ export function accessPolicyProvider(workspaces, botId, { channel, config, equal
   return Object.freeze({
     botId,
     getSettings: () => workspaces.accessPolicyFor(botId),
+    // Guest chat is opt-in: without it an allowlisted sender may run commands but
+    // cannot start a turn, because tools are not sandboxed per sender.
+    allowsGuestChat: () => config.allowGuestChat === true,
     isPrivileged(senderIds, conversationType) {
       if (!['direct', 'group'].includes(conversationType)) return false;
       const candidates = Array.isArray(senderIds) ? senderIds : [senderIds];

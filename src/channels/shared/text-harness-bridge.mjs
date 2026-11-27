@@ -6,6 +6,7 @@ import { t } from './i18n.mjs';
 import { availableCommandCatalog, commandHelpLines, SHARED_COMMAND_CATALOG } from './command-catalog.mjs';
 import {
   COMMAND_PERMISSION_DENIED_MESSAGE,
+  GUEST_CHAT_DENIED_MESSAGE,
   evaluateInboundAccess,
 } from './inbound-access.mjs';
 import {
@@ -367,7 +368,7 @@ export class TextHarnessBridge {
           messageId,
           decision.reason === 'command-not-allowed'
             ? t(COMMAND_PERMISSION_DENIED_MESSAGE)
-            : null,
+            : decision.reason === 'guest-chat-disabled' ? t(GUEST_CHAT_DENIED_MESSAGE) : null,
           { recordReceived: decision.reason === 'command-not-allowed' },
         );
       }
@@ -393,6 +394,18 @@ export class TextHarnessBridge {
       () => statusReaction.error(),
     );
     return processing;
+  }
+
+  /** Whether one sender is the account that scanned this bot. */
+  #isOwnerOfSender(senderId, kind = 'direct') {
+    if (typeof this.#accessPolicy?.isPrivileged !== 'function') return false;
+    try {
+      return this.#accessPolicy.isPrivileged(
+        senderId, kind === 'group' ? 'group' : 'direct',
+      ) === true;
+    } catch {
+      return false;
+    }
   }
 
   #acceptAcceptedMessage(normalized, messageId, senderId, busyMessageMode) {
@@ -1165,9 +1178,7 @@ export class TextHarnessBridge {
       }
       const workspaceCommand = !hasImages && !hasFiles
         ? await runWorkspaceCommand(text, this.#harness, conversationKey, {
-            isOwner: this.#accessPolicy?.isPrivileged?.(
-              message.senderId, message.kind === 'group' ? 'group' : 'direct',
-            ) === true,
+            isOwner: this.#isOwnerOfSender(message.senderId, message.kind),
             workspaceRoots: this.#workspaceRoots,
           })
         : null;
@@ -1958,7 +1969,11 @@ export class TextHarnessBridge {
         bot: this.#bot,
         answer: (text) => this.#answerInteractionCallback(callback, text),
         submit: (approvalId, outcome, options) => (
-          this.#approvals.submitByApprovalId(approvalId, outcome, options)
+          this.#approvals.submitByApprovalId(approvalId, outcome, {
+            ...options,
+            // A card press is an approval decision: it follows the owner rule too.
+            isOwner: this.#isOwnerOfSender(options?.actor),
+          })
         ),
       }).catch((error) => {
         this.#logger.error?.(
