@@ -413,3 +413,38 @@ test('the install channel follows the dependency spec', async () => {
   assert.equal(installChannelOf('git+https://github.com/other/dsh-im.git'), 'local');
   assert.equal(installChannelOf('https://example.com/dsh-im.zip'), 'local');
 });
+
+test('an update goes through the Host plugin manager when it is available', async (t) => {
+  const f = await fixture(t);
+  const installs = [];
+  const manager = {
+    async installBundle(spec, options) {
+      installs.push({ spec, options });
+      return { ok: true };
+    },
+  };
+  // No subprocess or Desktop executor: the manager alone must be enough, which is
+  // the case that used to report "executor-unavailable" for third-party Hosts.
+  f.options.ctx = { get: (name) => (name === 'pluginManager' ? manager : undefined) };
+  const runtime = f.runtime();
+  const info = await runtime.inspect();
+  assert.equal(info.blockedReason, null);
+  assert.equal(info.eligible, true);
+  await runtime.install('3.0.9', { expectedInstallationKey: info.installationKey });
+  assert.deepEqual(installs, [{ spec: `${PACKAGE_NAME}@3.0.9`, options: { saveExact: true } }]);
+  assert.deepEqual(f.calls, [], 'no pnpm child is spawned');
+});
+
+test('a manager rejection is reported as an install failure with its cause', async (t) => {
+  const f = await fixture(t);
+  const cause = Object.assign(new Error('registry unreachable'), { code: 'install-failed' });
+  f.options.ctx = {
+    get: (name) => (name === 'pluginManager'
+      ? { async installBundle() { throw cause; } }
+      : undefined),
+  };
+  const runtime = f.runtime();
+  const info = await runtime.inspect();
+  await assert.rejects(runtime.install('3.0.9', { expectedInstallationKey: info.installationKey }),
+    (error) => error.code === 'install-failed' && error.cause === cause);
+});

@@ -34,6 +34,10 @@ export const inject = [
   'workspaceRegistry',
   // Proactive sends ask the user before a message leaves the machine.
   'approval',
+  // The Host's own plugin manager installs updates; it owns pnpm, the registry
+  // fallback and the Desktop/CLI environment, so the panel no longer needs its
+  // own executor.
+  'pluginManager',
 ];
 
 function channelConfig(config, name, deliveryService) {

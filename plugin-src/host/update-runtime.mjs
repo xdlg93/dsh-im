@@ -232,6 +232,11 @@ export function createUpdateRuntime(options = {}) {
     const profiles = service(ctx, 'desktopProfiles');
     const desktop = service(ctx, 'desktopPnpm');
     const bootstrap = service(ctx, 'desktopPnpmBootstrap');
+    // The Host's own plugin manager already installs bundles for every profile
+    // shape (Desktop, CLI, LAN) and falls back to a mirror registry, so an update
+    // should go through it instead of spawning pnpm with our own executor.
+    const manager = service(ctx, 'pluginManager');
+    const managed = typeof manager?.installBundle === 'function';
     const isDesktop = Boolean(electron || profiles || desktop || bootstrap);
     const current = profiles?.current;
     const homeDir = isDesktop && bootstrap?.homeDir ? resolve(bootstrap.homeDir) : dshHome(env, osHome);
@@ -241,13 +246,18 @@ export function createUpdateRuntime(options = {}) {
       // path, or a single installed profile, still answers which one runs.
       profileName = profileFromModulePath(fileURLToPath(moduleUrl), resolve(homeDir));
     }
-    const result = { environmentKind: isDesktop ? 'desktop' : 'cli', homeDir, profileName };
+    const result = {
+      environmentKind: isDesktop ? 'desktop' : 'cli',
+      homeDir,
+      profileName,
+      ...(managed ? { manager } : {}),
+    };
     if (!profileNameValid(profileName)) return { ...result, blockedReason: 'unknown-profile' };
     const profileDir = await realpath(join(homeDir, 'profiles', profileName));
     const home = await realpath(homeDir);
     const base = { ...result, homeDir: home, profileDir };
 
-    if (isDesktop) {
+    if (isDesktop && !managed) {
       try {
         if (typeof desktop?.runPlugin !== 'function' || typeof desktop?.run !== 'function' || !bootstrap
             || !current?.dir || bootstrap.activeProfileName !== profileName
@@ -267,6 +277,22 @@ export function createUpdateRuntime(options = {}) {
       }
     }
 
+    if (managed) {
+      // The manager installs the bundle, but the index still filters by the DSH
+      // release this Host runs, so read it best-effort from the CLI package.
+      let dshVersion;
+      try {
+        const cli = typeof argv[1] === 'string' && isAbsolute(argv[1])
+          ? await containingPackage(argv[1], '@deepseek-ai/dsh') : null;
+        if (cli && typeof cli.manifest.version === 'string'
+          && semver.valid(cli.manifest.version) === cli.manifest.version) {
+          dshVersion = cli.manifest.version;
+        }
+      } catch {
+        // An unreadable CLI package only means the version filter is skipped.
+      }
+      return { ...base, manager, ...(dshVersion === undefined ? {} : { dshVersion }) };
+    }
     const subprocess = service(ctx, 'subprocess');
     if (typeof subprocess?.spawn !== 'function' || typeof argv[1] !== 'string' || !isAbsolute(argv[1]) || platform === 'win32') {
       return { ...base, blockedReason: 'executor-unavailable' };
@@ -399,12 +425,26 @@ export function createUpdateRuntime(options = {}) {
     const runtime = await environment();
     const fromRegistry = target === `${PACKAGE_NAME}@${version}`;
     // The registry override only matters for a registry install; a git spec is
-    // fetched from the repository the index names.
-    if (fromRegistry) await checkRegistry(runtime, signal);
+    // fetched from the repository the index names. The Host manager owns its own
+    // registry choice (and mirror fallback), so it is not second-guessed here.
+    if (fromRegistry && !runtime.manager) await checkRegistry(runtime, signal);
     // Config validation is asynchronous: do not replace a package another
     // package manager changed while it ran.
     const checked = await inspect();
     if (!checked.eligible || checked.installationKey !== before.installationKey) throw failure('installation-changed');
+    if (runtime.manager) {
+      // The manager validates the spec, runs pnpm in the profile and reports what
+      // it applied; a failure keeps its own code so the panel can name the cause.
+      try {
+        await runtime.manager.installBundle(target, { saveExact: true });
+      } catch (error) {
+        const code = error?.code ?? error?.failure?.code ?? error?.name;
+        // The manager already names the cause in its own code; keep it visible
+        // for the Host log while the panel reports the generic install failure.
+        throw failure('install-failed', { cause: error, managerCode: code });
+      }
+      return { stdout: '', stderr: '', cancel: () => {}, done: async () => {} };
+    }
     const args = fromRegistry
       ? ['add', '-w', '--save-exact', target, `--registry=${NPM_REGISTRY}`]
       : ['add', '-w', '--save-exact', target];
