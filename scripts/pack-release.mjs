@@ -4,7 +4,7 @@
 // whose network blocks it can install the same release from this tarball URL
 // instead, so every release leaves one behind.
 import { execFileSync } from 'node:child_process';
-import { mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { mkdir, readdir, rename } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
@@ -12,10 +12,9 @@ const root = resolve(import.meta.dirname, '..');
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const target = join(root, 'docs', 'pkg');
 await mkdir(target, { recursive: true });
-// Only one tarball per release is served; stale ones would be dead weight in git.
-for (const name of await readdir(target)) {
-  if (name.endsWith('.tgz')) await rm(join(target, name));
-}
+// Older release tarballs stay: the index keeps every version's download link, and
+// a missing file would turn those links into 404s. Each one is ~1.6 MB.
+
 execFileSync('pnpm', ['pack', '--pack-destination', target], { cwd: root, stdio: 'inherit' });
 const packed = (await readdir(target)).find((name) => name.endsWith('.tgz'));
 if (!packed) throw new Error('pnpm pack produced no tarball');
