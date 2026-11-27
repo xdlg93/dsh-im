@@ -72,16 +72,16 @@ jobs:
               echo "created ${TAG}"
             fi
 
-            # Assets belong to the release being cut, not to a notes refresh.
-            if [ "${targets}" = "${TAG}" ] && compgen -G "docs/pkg/*.tgz" >/dev/null; then
-              gh release upload "${TAG}" docs/pkg/*.tgz --clobber
-              # One canonical asset per release: drop anything else, such as a
-              # tarball uploaded by hand before this workflow existed.
-              CANONICAL="dsh-im-${TAG#v}.tgz"
-              while IFS= read -r asset; do
-                [ -z "${asset}" ] && continue
-                [ "${asset}" = "${CANONICAL}" ] && continue
-                gh release delete-asset "${TAG}" "${asset}" --yes
-              done < <(gh release view "${TAG}" --json assets --jq '.assets[].name')
+            # Attach this tag's own tarball whenever the tree carries it, so a
+            # notes refresh also repairs an asset that was uploaded from an older
+            # pack. One canonical asset per release: anything else is removed.
+            CANONICAL="dsh-im-${TAG#v}.tgz"
+            if [ -f "docs/pkg/${CANONICAL}" ]; then
+              gh release upload "${TAG}" "docs/pkg/${CANONICAL}" --clobber
             fi
+            while IFS= read -r asset; do
+              [ -z "${asset}" ] && continue
+              [ "${asset}" = "${CANONICAL}" ] && continue
+              gh release delete-asset "${TAG}" "${asset}" --yes
+            done < <(gh release view "${TAG}" --json assets --jq '.assets[].name')
           done
